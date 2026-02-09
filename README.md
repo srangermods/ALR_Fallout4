@@ -26,13 +26,19 @@ Currently only works for FO4 Old-Gen (ver 163)
 
 -Added loading screen replacers for all loading screens + the free CCs given in the NG update (this is a new ESL-flagged plugin, CC_ALR.esp)
 
+-removed LoadingMenu.swf from the mod so the overlay text will show by default.
+
 
 
 ### Revamped ALR.INI
 
+-cleaned up the INI so it uses industry standard INI syntax, as opposed to commas, semicolons, and 0s and 1s
 
 -Removed High FPS Physics config logic, was too intrusive. Just make sure in your High FPS Physics Fix Config that `DisableBlackLoadingScreens=true`
 
+-use `EnableLoadingScreenGeneration = false` to turn on or off random loading screen image generation from ALR_Image_DIR
+
+-keep this setting default `EnableOverrideDefaultBackgroundImage = false`
 
 -Default path to images now is F4SE/Plugins/ALR_Image_Dir in your data directory
 
