@@ -1,0 +1,50 @@
+cmake_minimum_required(VERSION 3.15)
+project(ALR_F4SE)
+
+# Force C++17
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+
+# Set plugin name
+set(PLUGIN_NAME "ALR")
+
+add_library(${PLUGIN_NAME} SHARED
+    dllmain.cpp
+    PathBuilder.cpp
+    PathDestroyer.cpp
+    imageConvert.cpp
+    UI.cpp
+    cmd.cpp
+    pch.cpp
+)
+
+# Set output folder
+set_target_properties(${PLUGIN_NAME} PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+
+target_precompile_headers(${PLUGIN_NAME} PRIVATE pch.h)
+
+# External headers and libs (from F4SE build)
+target_include_directories(${PLUGIN_NAME} PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/DirectXTex-jan2023/DirectXTex
+    ${CMAKE_SOURCE_DIR}/extern/include        # includes F4SE and common headers
+)
+
+target_link_directories(${PLUGIN_NAME} PRIVATE
+    ${CMAKE_SOURCE_DIR}/extern/lib
+)
+
+# If you ever want to link f4se_common.lib (not always needed)
+target_link_libraries(${PLUGIN_NAME} PRIVATE f4se_common DirectXTex common)
+
+# Optional: C++17 and warnings
+target_compile_features(${PLUGIN_NAME} PRIVATE cxx_std_17)
+
+target_compile_options(${PLUGIN_NAME} PRIVATE
+  $<$<CONFIG:Release>:/MT>
+  $<$<CONFIG:Debug>:/MTd>
+)

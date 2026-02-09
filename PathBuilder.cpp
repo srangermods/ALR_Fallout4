@@ -8,18 +8,22 @@ PathBuilder::PathBuilder(PathDataParent& _pathData) : pathData(&_pathData)
 	findDLLPath();
 	findPrefPath();
 	readInis();
-	if (rebuildIniFlag) rebuildIni();
+	//if (rebuildIniFlag) rebuildIni();
 	generateOutputPaths();
 
-	if (dImageRD)
-		if (!verifyImages())
-			dImageRD = false;
+	if (!dImageRD){
+		_MESSAGE("Disable deleting and reloading images.");
+		if (!verifyImages()){
+			dImageRD = true;
+		}
+	}
 
 	//if (dOverlayRD)
 	//	if (!verifyOverlay())
 	//		dOverlayRD = false;
 
-	if (!dImageRD && !dOverlayRD) {
+	if (dImageRD && !dOverlayRD) {
+		_MESSAGE("Setting up input files and paths.");
 		buildTextureDir();
 		verifyFiles();
 		findInputFiles();
@@ -39,47 +43,94 @@ PathBuilder::~PathBuilder()
 	delete pathData;
 }
 
+bool parseBool(const std::string& val) {
+    std::string lower = val;
+    std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+    return lower == "1" || lower == "true" || lower == "yes";
+}
+
+std::vector<int> parseIntList(const std::string& line) {
+    std::vector<int> result;
+    std::stringstream ss(line);
+    std::string token;
+    while (std::getline(ss, token, ',')) {
+        token.erase(0, token.find_first_not_of(" \t"));
+        token.erase(token.find_last_not_of(" \t") + 1);
+        try {
+            result.push_back(std::stoi(token));
+        } catch (...) {
+            // skip invalid entries
+        }
+    }
+    return result;
+}
+
+std::unordered_map<std::string, std::string> parseIni(const std::string& filename) {
+    std::ifstream file(filename);
+    std::unordered_map<std::string, std::string> settings;
+
+    std::string line;
+    while (std::getline(file, line)) {
+        // Remove comments and whitespace
+        size_t commentPos = line.find_first_of(";#");
+        if (commentPos != std::string::npos)
+            line = line.substr(0, commentPos);
+        size_t equals = line.find('=');
+        if (equals == std::string::npos)
+            continue;
+
+        std::string key = line.substr(0, equals);
+        std::string value = line.substr(equals + 1);
+
+        // Trim whitespace
+        key.erase(0, key.find_first_not_of(" \t"));
+        key.erase(key.find_last_not_of(" \t") + 1);
+        value.erase(0, value.find_first_not_of(" \t"));
+        value.erase(value.find_last_not_of(" \t") + 1);
+
+        if (!key.empty())
+            settings[key] = value;
+    }
+
+    return settings;
+}
 void PathBuilder::readInis()
 {
 	ifstream in(pathData->iniPath);
 	message::checkForFalseError(in.is_open(), "ALR.ini Not Found");
 
-	in.ignore((numeric_limits<streamsize>::max)(), '\n');
-	getline(in, inputPath);
-	if (inputPath == "default")
-		findImgDir();
 
-	else if (inputPath.at(inputPath.size() - 1) != '\\') {
-		inputPath.push_back('\\');
-		rebuildIniFlag = true;
+	findImgDir();
+	firstTimeCheck();
+
+	auto settings = parseIni(pathData->iniPath);
+
+    bool enableGen = parseBool(settings["EnableLoadingScreenGeneration"]);
+    bool overrideBG = parseBool(settings["EnableOverrideDefaultBackgroundImage"]);
+    std::vector<int> whitelist = parseIntList(settings["WhitelistImageFilesFromRegeneration"]);
+    // Debug print
+    // Debug print
+	_MESSAGE("EnableLoadingScreenGeneration: %d", enableGen);
+	_MESSAGE("EnableOverrideDefaultBackgroundImage: %d", overrideBG);
+
+	std::ostringstream whitelistSS;
+	whitelistSS << "Whitelist: ";
+	for (int n : whitelist) whitelistSS << n << " ";
+	_MESSAGE("%s", whitelistSS.str().c_str());
+
+
+	for (int num : whitelist) {
+    	whitelistFileNames.push_back(std::to_string(num) + ".DDS");
 	}
 
-	in.ignore((numeric_limits<streamsize>::max)(), ';');
-	in.ignore((numeric_limits<streamsize>::max)(), ':');
 
-	if (in.get() == '0')
-		firstTimeCheck();
-
-	in.ignore((numeric_limits<streamsize>::max)(), ':');
-
-	dImageRD = in.get() == '1' ? true : false;
-
+	dImageRD = enableGen;
 	//in.ignore((numeric_limits<streamsize>::max)(), ':');
 
 	//if (in.get() == '1')
 	//	dOverlayRD = true;
 
-	in.ignore((numeric_limits<streamsize>::max)(), ':');
-	pathData->backgroundReplace = in.get() == '1' ? true : false;
-
-	in.ignore((numeric_limits<streamsize>::max)(), ':');
-	HFPSPFsearch = in.get() == '1' ? true : false;
-
-	in.ignore((numeric_limits<streamsize>::max)(), ':');
-	HFPSPFapplied = in.get() == '1' ? true : false;
-	
-	if(HFPSPFsearch)
-		HFPSPFpatch();
+	pathData->backgroundReplace = overrideBG;
 
 	in.close();
 
@@ -118,67 +169,6 @@ void PathBuilder::readInis()
 	in.close();
 }
 
-void PathBuilder::HFPSPFpatch()
-{
-	string HFPSPFpath = dataPathSS.str() + "F4SE\\Plugins\\HighFPSPhysicsFix.ini";
-
-	if (path::verifyPath(HFPSPFpath)) {
-		ifstream in(HFPSPFpath);
-		
-		if (in.is_open()) {
-			string line;
-			int boolIndex = 27;
-
-			while (getline(in, line)) {
-				if (line.find("DisableBlackLoadingScreens", 0) != string::npos) {
-					char ls;
-
-					ls = line.at(boolIndex);
-					in.close();
-
-					string tempPath = inputPath + "\\temp.ini";
-
-					if (ls == 'f' || ls == 'F') {
-
-						ifstream read(HFPSPFpath);
-						ofstream write(tempPath);
-
-						if (read.is_open() && write.is_open()) {
-
-							string readString;
-							while (getline(read, readString)) {
-								if (readString == "DisableBlackLoadingScreens=false")
-									readString = "DisableBlackLoadingScreens=true";
-
-								readString += '\n';
-
-								write << readString;
-							}
-
-							read.close();
-							write.close();
-
-							message::checkForError(filesystem::remove(HFPSPFpath));
-							filesystem::copy(tempPath, HFPSPFpath);
-							message::checkForError(filesystem::remove(tempPath));
-
-							HFPSPFapplied = true;
-							HFPSPFsearch = false;
-							rebuildIniFlag = true;
-						}
-						else
-							message::displayMessage("ALR_WARNING", "HighFPSPhysicsFix.ini Failed Modification Failed");
-					}
-						
-					break;
-				}
-			}
-
-		}
-		else
-			message::displayMessage("ALR_WARNING", "HighFPSPhysicsFix.ini Failed to Open");
-	}
-}
 
 void PathBuilder::verifyFiles()
 {
@@ -193,16 +183,14 @@ void PathBuilder::rebuildIni()
 	ofstream outF(pathData->iniPath);
 	outF << ";Enter path to images below, type 'default' to use default path\n" + inputPath + 
 		"\n\n;First Time Install Check Success:1\n\n;Disable image reload and delete (better performance):" + to_string(dImageRD) + 
-		"\n\n;Override default background image (replaces occasional black loadscreens, can cause mod incompatibilities):" + to_string(pathData->backgroundReplace) +
-		"\n\n;Search for HighFPSPhysicsFix:" + to_string(HFPSPFsearch) + 
-		"\n\n;HighFPSPhysicsFix applied:" + to_string(HFPSPFapplied); //+ "\n\n;Disable overlay reload and delete (better performance):" + to_string(dOverlayRD);
+		"\n\n;Override default background image (replaces occasional black loadscreens, can cause mod incompatibilities):" + to_string(pathData->backgroundReplace);
 	outF.close();
 }
 
 void PathBuilder::findImgDir()
 {
 	inputPath = dataPathSS.str() + "F4SE\\Plugins\\ALR_Image_Dir\\";
-	rebuildIniFlag = true;
+	//rebuildIniFlag = true;
 }
 
 void PathBuilder::firstTimeCheck()
@@ -211,7 +199,7 @@ void PathBuilder::firstTimeCheck()
 		!(path::verifyPath(dataPathSS.str() + "ALR - All DLC.esp") || path::verifyPath(dataPathSS.str()) + "ALR - No DLC.esp"))
 		message::displayErrorMessage("ALR_ERROR","ALR esp and or Main ba2 is missing, check the mod was installed properly");
 
-	rebuildIniFlag = true;
+	//rebuildIniFlag = true;
 }
 
 void PathBuilder::buildTextureDir()
@@ -289,6 +277,10 @@ void PathBuilder::correctFiles() {
 }
 
 void PathBuilder::generateInputPaths() {
+	random_device rd;
+	mt19937 g(rd());
+	shuffle(inputFiles.begin(), inputFiles.end(), g);
+	
 	for (auto& inputFile : inputFiles)
 		pathData->inputFilePaths.emplace_back(inputFile);
 }

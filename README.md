@@ -1,8 +1,15 @@
-# ALR_Fallout4
-Source Code For Automated Loadscreen Replacer (ALR) For Fallout 4
+![testbuild](https://github.com/ianpatt/f4se/workflows/testbuild/badge.svg)
 
-To compile DLL the project must be compiled with the latest version of F4SE and DirectXTex 
+## Building
 
-F4SE: https://github.com/ianpatt/f4se
+```
+git clone https://github.com/ianpatt/common
+git clone https://github.com/ianpatt/f4se
+cmake -B common/build -S common -DCMAKE_INSTALL_PREFIX=extern common
+cmake --build common/build --config Release --target install
+cmake -B f4se/build -S f4se -DCMAKE_INSTALL_PREFIX=extern f4se
+cmake --build f4se/build --config Release
 
-DirectXTex: https://github.com/microsoft/DirectXTex
+cmake .. -G "Visual Studio 17 2022" -A x64
+cmake --build . --config Release
+```

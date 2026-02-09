@@ -23,11 +23,6 @@ PathDestoryer::PathDestoryer(PathDataParent& _pathData)
 
 void PathDestoryer::deleteFiles()
 {
-	message::checkForError(filesystem::remove_all(ALRDirPath));
-	message::checkForError(filesystem::remove(overlayPath));
-
-	if(backgroundReplace)
-		message::checkForError(filesystem::remove(backgroundPath));
 }
 
 void PathDestoryer::deleteEmptyFolders()

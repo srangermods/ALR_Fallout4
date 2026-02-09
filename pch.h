@@ -6,10 +6,12 @@
 #define PLUGIN_NAME "ALR"
 
 #define PLUGIN_PATH_LEN 20
-#define MAX_INPUTS 25
+#define MAX_INPUTS 455
+
+#define NOMINMAX
 
 #include <Windows.h>
-#include <DirectXTex-master/DirectXTex/DirectXTex.h>
+#include <DirectXTex-mar2025/DirectXTex/DirectXTex.h>
 #include <comdef.h>
 #include <memory>
 #include <thread>
@@ -24,10 +26,16 @@
 #include <random>
 #include <vector>
 #include <array>
+#include <unordered_map>
 #include <shlobj.h>
 #include <limits>
 #include <numeric>
+#include <algorithm>
+#include <cctype>
 
+#include "common/ITypes.h"
+#include "common/IDebugLog.h"
+#include "f4se_common/Utilities.h"
 #include "F4SE/PluginAPI.h"
 #include "f4se_common/f4se_version.h"
 

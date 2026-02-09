@@ -48,11 +48,11 @@ public:
 
 class OFF {
 public:
-	short width = 0,
+	long width = 0,
 		height = 0;
 
 	OFF() {};
-	OFF(short _width, short _height) : width(_width), height(_height) {};
+	OFF(long _width, long _height) : width(_width), height(_height) {};
 };
 
 class OFF_CON {
@@ -148,7 +148,7 @@ class ImageConvert : public ImageConvertParent {
 private:
 
 	PathDataParent* pathData = NULL;
-
+	std::vector<std::string> whitelistFileNames;
 	void convert(wstring _inputFilePath, wstring _outputFilePath),
 		createOverlay(wstring _outputFilePath);
 
@@ -160,6 +160,7 @@ private:
 
 public:
 
-	ImageConvert(PathDataParent& _pathData);
+	
+	ImageConvert(PathDataParent& _pathData, const std::vector<std::string>& whitelistFileNames);
 	~ImageConvert();
 };

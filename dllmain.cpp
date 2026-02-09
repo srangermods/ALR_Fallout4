@@ -16,13 +16,9 @@ __declspec(dllexport) PathBuilderParent* PathBuilderCreate(PathDataParent& _path
 {
 	return new PathBuilder(_pathData);
 }
-__declspec(dllexport) PathDestoryerParent* PathDestoryerCreate(PathDataParent& _pathData)
+__declspec(dllexport) ImageConvertParent* ImageConvertCreate(PathDataParent& _pathData, const std::vector<std::string>& whitelistFileNames)
 {
-	return new PathDestoryer(_pathData);
-}
-__declspec(dllexport) ImageConvertParent* ImageConvertCreate(PathDataParent& _pathData)
-{
-	return new ImageConvert(_pathData);
+    return new ImageConvert(_pathData, whitelistFileNames);
 }
 PathDataParent* pathData = PathDataCreate();
 
@@ -61,10 +57,14 @@ extern "C"
 		_MESSAGE("%s loaded", PLUGIN_NAME);
 
 		PathBuilderParent* PBinst = PathBuilderCreate(*pathData);
-		ImageConvertParent* IMinst = ImageConvertCreate(*pathData);
+		if (PBinst->IsImageRD()) {
+			 PathBuilder* realPBinst = static_cast<PathBuilder*>(PBinst);
+
+			ImageConvertParent* IMinst = ImageConvertCreate(*pathData, realPBinst->whitelistFileNames);
+			delete IMinst;
+		}
 
 		delete PBinst;
-		delete IMinst;
 		return true;
 	}
 };
@@ -93,8 +93,6 @@ BOOL WINAPI DllMain(
 
 	case DLL_PROCESS_DETACH:
 
-		PathDestoryerParent* PDinst = PathDestoryerCreate(*pathData);
-		delete PDinst;
 		delete &pathData;
 		// Perform any necessary cleanup.
 		break;

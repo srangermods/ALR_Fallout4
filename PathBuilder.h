@@ -5,7 +5,8 @@
 
 class PathBuilderParent {
 public:
-
+	virtual ~PathBuilderParent() {}
+	virtual bool IsImageRD() const = 0;  // New interface
 };
 
 class PathBuilder : public PathBuilderParent {
@@ -26,20 +27,18 @@ private:
 		findPrefPath(),
 		rebuildIni(),
 		verifyFiles(),
-		findImgDir(),
-		HFPSPFpatch();
+		findImgDir();
 
 	void buildTextureDir();
 
 	bool verifyImages(),
-		HFPSPFsearch,
-		HFPSPFapplied,
 		dImageRD,
 		dOverlayRD,
 		rebuildIniFlag;
 
 public:
-
+	std::vector<std::string> whitelistFileNames;
 	PathBuilder(PathDataParent& _pathData);
 	~PathBuilder();
+	bool IsImageRD() const override { return dImageRD; }  // Implementation
 };
