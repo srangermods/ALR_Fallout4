@@ -1,6 +1,6 @@
 ![testbuild](https://github.com/ianpatt/f4se/workflows/testbuild/badge.svg)
 
-## Building
+## Building (oldgen via cmake)
 
 ```
 git clone https://github.com/ianpatt/common
