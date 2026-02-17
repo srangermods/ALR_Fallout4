@@ -20,7 +20,7 @@ std::string WideToUtf8(const std::wstring& wstr) {
 ImageConvert::ImageConvert(PathDataParent& _pathData, const std::vector<std::string>& whitelistFileNames)
     : pathData(&_pathData), whitelistFileNames(whitelistFileNames)
 {
-	message::checkForError(CoInitializeEx(NULL, COINIT_APARTMENTTHREADED));
+	//message::checkForError(CoInitializeEx(NULL, COINIT_APARTMENTTHREADED));
 
 
 	sizeImageData = imageData(pathData->outputWidth, pathData->outputHeight);
@@ -31,14 +31,14 @@ ImageConvert::ImageConvert(PathDataParent& _pathData, const std::vector<std::str
 		createOverlay(path::to_wstring(pathData->overlayPath));
 	}
 	else
-		_MESSAGE("Overlay already exists, not creating ");
+		//_MESSAGE("Overlay already exists, not creating ");
 	for (int i = 0; i < MAX_INPUTS; i++){
 		std::wstring outputFilePathW = path::to_wstring(pathData->outputPaths.at(i));
         std::string filename = std::filesystem::path(outputFilePathW).filename().string();
 
         // Skip conversion if filename is in whitelist
         if (std::find(whitelistFileNames.begin(), whitelistFileNames.end(), filename) != whitelistFileNames.end()) {
-            _MESSAGE("Skipping conversion for whitelisted file: %s", filename.c_str());
+            //_MESSAGE("Skipping conversion for whitelisted file: %s", filename.c_str());
             continue;
         }
 		convert(path::to_wstring(pathData->inputFilePaths.at(i)), path::to_wstring(pathData->outputPaths.at(i)));
@@ -75,7 +75,7 @@ void ImageConvert::convert(wstring _inputFilePath, wstring _outputFilePath) {
 		message::checkForError(LoadFromWICFile(_inputFilePath.c_str(), WIC_FLAGS_NONE, &inImageInfo, inImage));
 
 	if (IsCompressed(inImage.GetMetadata().format)) {
-		//_MESSAGE("image is compressed");
+		////_MESSAGE("image is compressed");
 		//DXGI_FORMAT_R8G8B8A8_UNORM
 	   	//ScratchImage decompressedImage;
 	    // Decompress to a specific uncompressed format like DXGI_FORMAT_R8G8B8A8_UNORM
@@ -85,12 +85,12 @@ void ImageConvert::convert(wstring _inputFilePath, wstring _outputFilePath) {
 	inImageData = imageData(inImage.GetMetadata().width, inImage.GetMetadata().height);
 	
 	if (!(inImageData.ar == maxDisplayImageData.ar) || inImageData.resMul > maxDisplayImageData.resMul) {
-		//_MESSAGE("Right before Resize call ");
-		//_MESSAGE("%d width", maxDisplayImageData.res.width);
-		//_MESSAGE("%d height", maxDisplayImageData.res.height);
+		////_MESSAGE("Right before Resize call ");
+		////_MESSAGE("%d width", maxDisplayImageData.res.width);
+		////_MESSAGE("%d height", maxDisplayImageData.res.height);
 		ScratchImage tmpImage;
 		message::checkForError(Resize(*inImage.GetImage(0, 0, 0), maxDisplayImageData.res.width, maxDisplayImageData.res.height, TEX_FILTER_DEFAULT, tmpImage));
-		//_MESSAGE("Right after Resize call ");
+		////_MESSAGE("Right after Resize call ");
 		//inImage.reset();  // is this needed
 		inImage = (std::move(tmpImage));
 		inImageData = imageData(maxDisplayImageData.res.width, maxDisplayImageData.res.height);

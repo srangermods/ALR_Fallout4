@@ -10,8 +10,10 @@
 
 #define NOMINMAX
 
+#include <RE/Fallout.h>
+#include <F4SE/F4SE.h>
 #include <Windows.h>
-#include <DirectXTex-mar2025/DirectXTex/DirectXTex.h>
+#include <DirectXTex.h>
 #include <comdef.h>
 #include <memory>
 #include <thread>
@@ -33,11 +35,11 @@
 #include <algorithm>
 #include <cctype>
 
-#include "common/ITypes.h"
-#include "common/IDebugLog.h"
-#include "f4se_common/Utilities.h"
-#include "F4SE/PluginAPI.h"
-#include "f4se_common/f4se_version.h"
+//#include "common/ITypes.h"
+//#include "common/IDebugLog.h"
+//#include "f4se_common/Utilities.h"
+//#include "F4SE/PluginAPI.h"
+//#include "f4se_common/f4se_version.h"
 
 using namespace std;
 using namespace DirectX;

@@ -12,7 +12,7 @@ PathBuilder::PathBuilder(PathDataParent& _pathData) : pathData(&_pathData)
 	generateOutputPaths();
 
 	if (!dImageRD){
-		_MESSAGE("Disable deleting and reloading images.");
+		//_MESSAGE("Disable deleting and reloading images.");
 		if (!verifyImages()){
 			dImageRD = true;
 		}
@@ -23,7 +23,7 @@ PathBuilder::PathBuilder(PathDataParent& _pathData) : pathData(&_pathData)
 	//		dOverlayRD = false;
 
 	if (dImageRD && !dOverlayRD) {
-		_MESSAGE("Setting up input files and paths.");
+		//_MESSAGE("Setting up input files and paths.");
 		buildTextureDir();
 		verifyFiles();
 		findInputFiles();
@@ -110,13 +110,13 @@ void PathBuilder::readInis()
     std::vector<int> whitelist = parseIntList(settings["WhitelistImageFilesFromRegeneration"]);
     // Debug print
     // Debug print
-	_MESSAGE("EnableLoadingScreenGeneration: %d", enableGen);
-	_MESSAGE("EnableOverrideDefaultBackgroundImage: %d", overrideBG);
+	//_MESSAGE("EnableLoadingScreenGeneration: %d", enableGen);
+	//_MESSAGE("EnableOverrideDefaultBackgroundImage: %d", overrideBG);
 
 	std::ostringstream whitelistSS;
 	whitelistSS << "Whitelist: ";
 	for (int n : whitelist) whitelistSS << n << " ";
-	_MESSAGE("%s", whitelistSS.str().c_str());
+	//_MESSAGE("%s", whitelistSS.str().c_str());
 
 
 	for (int num : whitelist) {
