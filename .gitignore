@@ -33,3 +33,6 @@ scripts/build_src
 
 # cmake
 build/*
+
+# xmake
+.xmake

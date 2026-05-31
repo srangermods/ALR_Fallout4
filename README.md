@@ -1,6 +1,9 @@
-![testbuild](https://github.com/ianpatt/f4se/workflows/testbuild/badge.svg)
 
-## Building
+## AE Build
+```
+xmake build
+```
+## Building (oldgen via cmake)
 
 ```
 git clone https://github.com/ianpatt/common
@@ -16,7 +19,7 @@ cmake --build . --config Release
 
 ## Changes 
 
-Currently only works for FO4 Old-Gen (ver 163)
+Works for Old gen ( v163) and AE (1191)
 
 -Re-implemented/restored source code from original repo this was forked from
 

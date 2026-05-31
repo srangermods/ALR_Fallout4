@@ -20,7 +20,7 @@ std::string WideToUtf8(const std::wstring& wstr) {
 ImageConvert::ImageConvert(PathDataParent& _pathData, const std::vector<std::string>& whitelistFileNames)
     : pathData(&_pathData), whitelistFileNames(whitelistFileNames)
 {
-	//message::checkForError(CoInitializeEx(NULL, COINIT_APARTMENTTHREADED));
+	message::checkForError(CoInitializeEx(NULL, COINIT_APARTMENTTHREADED));
 
 
 	sizeImageData = imageData(pathData->outputWidth, pathData->outputHeight);
