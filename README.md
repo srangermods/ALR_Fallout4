@@ -1,6 +1,11 @@
 
 ##  Build
 ```
+git clone --recurse-submodules https://github.com/srangermods/ALR_Fallout4.git
+
+Build DirectXTex lib (Visual Studio 2022, /MD, x64 Release) via .Sln (Desktop_2022_Win10)
+Place DirectXTex lib in extern/lib
+
 xmake build
 ```
 

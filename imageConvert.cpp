@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "ImageConvert.h"
+#include <cmath>
 
 std::string WideToUtf8(const std::wstring& wstr) {
     if (wstr.empty()) return std::string();
@@ -20,20 +21,23 @@ std::string WideToUtf8(const std::wstring& wstr) {
 ImageConvert::ImageConvert(PathDataParent& _pathData, const std::vector<std::string>& whitelistFileNames)
     : pathData(&_pathData), whitelistFileNames(whitelistFileNames)
 {
-	message::checkForError(CoInitializeEx(NULL, COINIT_APARTMENTTHREADED));
+    message::checkForError(CoInitializeEx(NULL, COINIT_APARTMENTTHREADED));
 
+    // Every output is now a fixed 2048x2048 canvas, regardless of the game's
+    // actual display resolution or aspect ratio. AR(1,1) + res4k=false resolves
+    // to RES(2048, 2048) via the AR(1,1) entry in ARtupleArray (res2kMul = 2048).
+    outputAR = AR(1, 1);
+    maxDisplayImageData = imageData(outputAR, false);
 
-	sizeImageData = imageData(pathData->outputWidth, pathData->outputHeight);
-	maxDisplayImageData = imageData(sizeImageData.ar, sizeImageData.arMul, sizeImageData.resMul);
-	outputAR = AR(1, 1);
-	
-	if (!std::filesystem::exists(path::to_wstring(pathData->overlayPath))) {
-		createOverlay(path::to_wstring(pathData->overlayPath));
-	}
-	else
-		//_MESSAGE("Overlay already exists, not creating ");
-	for (int i = 0; i < MAX_INPUTS; i++){
-		std::wstring outputFilePathW = path::to_wstring(pathData->outputPaths.at(i));
+    if (!std::filesystem::exists(path::to_wstring(pathData->overlayPath))) {
+        createOverlay(path::to_wstring(pathData->overlayPath));
+    }
+    else {
+        //_MESSAGE("Overlay already exists, not creating ");
+    }
+
+    for (int i = 0; i < MAX_INPUTS; i++) {
+        std::wstring outputFilePathW = path::to_wstring(pathData->outputPaths.at(i));
         std::string filename = std::filesystem::path(outputFilePathW).filename().string();
 
         // Skip conversion if filename is in whitelist
@@ -41,68 +45,60 @@ ImageConvert::ImageConvert(PathDataParent& _pathData, const std::vector<std::str
             //_MESSAGE("Skipping conversion for whitelisted file: %s", filename.c_str());
             continue;
         }
-		convert(path::to_wstring(pathData->inputFilePaths.at(i)), path::to_wstring(pathData->outputPaths.at(i)));
-	}
-	//MessageBoxW(NULL, L"Finished first convert call ", L"Debug", MB_OK);
-	if (pathData->backgroundReplace) {
-		maxDisplayImageData = imageData(AR(2, 1), sizeImageData.res4k);
-		outputAR = AR(2, 1);
-		convert(path::to_wstring(pathData->inputFilePaths.at(0)), path::to_wstring(pathData->backgroundPath));
-	}
+        convert(path::to_wstring(pathData->inputFilePaths.at(i)), path::to_wstring(pathData->outputPaths.at(i)));
+    }
+
+    if (pathData->backgroundReplace) {
+        // Background now uses the same fixed 2048x2048 canvas as everything else.
+        convert(path::to_wstring(pathData->inputFilePaths.at(0)), path::to_wstring(pathData->backgroundPath));
+    }
 }
 
 ImageConvert::~ImageConvert()
 {
-	delete pathData;
+    delete pathData;
 }
 
 void ImageConvert::createOverlay(wstring _outputFilePath)
 {
-	ScratchImage overlayImage;
-	message::checkForError(overlayImage.Initialize2D(DXGI_FORMAT_R8G8B8A8_UNORM, maxDisplayImageData.res.width, maxDisplayImageData.res.height, 1, 0, CP_FLAGS_NONE));
-	message::checkForError(SaveToDDSFile(*overlayImage.GetImage(0, 0, 0), DDS_FLAGS_NONE, _outputFilePath.c_str()));
+    ScratchImage overlayImage;
+    message::checkForError(overlayImage.Initialize2D(DXGI_FORMAT_R8G8B8A8_UNORM, maxDisplayImageData.res.width, maxDisplayImageData.res.height, 1, 0, CP_FLAGS_NONE));
+    message::checkForError(SaveToDDSFile(*overlayImage.GetImage(0, 0, 0), DDS_FLAGS_NONE, _outputFilePath.c_str()));
 }
 
 void ImageConvert::convert(wstring _inputFilePath, wstring _outputFilePath) {
 
-	TexMetadata inImageInfo;
-	ScratchImage inImage, outImage, deCompressedImage;
-	imageData inImageData, outImageData;
+    TexMetadata inImageInfo;
+    ScratchImage inImage, outImage, deCompressedImage;
 
-	if (path::getExtension(_inputFilePath) == L"dds") 
-		message::checkForError(LoadFromDDSFile(_inputFilePath.c_str(), DDS_FLAGS_NONE, &inImageInfo, inImage));
-	else 
-		message::checkForError(LoadFromWICFile(_inputFilePath.c_str(), WIC_FLAGS_NONE, &inImageInfo, inImage));
+    if (path::getExtension(_inputFilePath) == L"dds")
+        message::checkForError(LoadFromDDSFile(_inputFilePath.c_str(), DDS_FLAGS_NONE, &inImageInfo, inImage));
+    else
+        message::checkForError(LoadFromWICFile(_inputFilePath.c_str(), WIC_FLAGS_NONE, &inImageInfo, inImage));
 
-	if (IsCompressed(inImage.GetMetadata().format)) {
-		////_MESSAGE("image is compressed");
-		//DXGI_FORMAT_R8G8B8A8_UNORM
-	   	//ScratchImage decompressedImage;
-	    // Decompress to a specific uncompressed format like DXGI_FORMAT_R8G8B8A8_UNORM
-	    message::checkForError(Decompress(*inImage.GetImage(0, 0, 0), DXGI_FORMAT_R8G8B8A8_UNORM, deCompressedImage));
-	    inImage = (std::move(deCompressedImage));
-	}
-	inImageData = imageData(inImage.GetMetadata().width, inImage.GetMetadata().height);
-	
-	if (!(inImageData.ar == maxDisplayImageData.ar) || inImageData.resMul > maxDisplayImageData.resMul) {
-		////_MESSAGE("Right before Resize call ");
-		////_MESSAGE("%d width", maxDisplayImageData.res.width);
-		////_MESSAGE("%d height", maxDisplayImageData.res.height);
-		ScratchImage tmpImage;
-		message::checkForError(Resize(*inImage.GetImage(0, 0, 0), maxDisplayImageData.res.width, maxDisplayImageData.res.height, TEX_FILTER_DEFAULT, tmpImage));
-		////_MESSAGE("Right after Resize call ");
-		//inImage.reset();  // is this needed
-		inImage = (std::move(tmpImage));
-		inImageData = imageData(maxDisplayImageData.res.width, maxDisplayImageData.res.height);
-	}
-	
-	outImageData = imageData(inImageData.arMul, inImageData.resMul, inImageData.off, outputAR);
-	message::checkForError(outImage.Initialize2D(inImage.GetMetadata().format, outImageData.res.width, outImageData.res.height, 1, 0, CP_FLAGS_NONE));
+    if (IsCompressed(inImage.GetMetadata().format)) {
+        message::checkForError(Decompress(*inImage.GetImage(0, 0, 0), DXGI_FORMAT_R8G8B8A8_UNORM, deCompressedImage));
+        inImage = std::move(deCompressedImage);
+    }
 
-	Rect r0(0, 0, inImageData.res.width, inImageData.res.height);
-	message::checkForError(CopyRectangle(*inImage.GetImage(0, 0, 0), r0, *outImage.GetImage(0, 0, 0), TEX_FILTER_DEFAULT, outImageData.off.width, outImageData.off.height));
+    // Every input is assumed 16:9. Fit it into the fixed 2048x2048 canvas by
+    // matching the canvas width and scaling height to preserve 16:9, then
+    // center it vertically (letterboxed) since 16:9 doesn't fill a square.
+    const long canvasSize = maxDisplayImageData.res.width; // 2048
+    const long fitWidth = canvasSize;
+    const long fitHeight = static_cast<long>(std::lround(canvasSize * 9.0 / 16.0)); // 1152
+    const long offsetX = 0;
+    const long offsetY = (canvasSize - fitHeight) / 2; // 448
 
-	message::checkForError(SaveToDDSFile(*outImage.GetImage(0, 0, 0), DDS_FLAGS_NONE, _outputFilePath.c_str()));
+    ScratchImage resizedImage;
+    message::checkForError(Resize(*inImage.GetImage(0, 0, 0), fitWidth, fitHeight, TEX_FILTER_DEFAULT, resizedImage));
+
+    message::checkForError(outImage.Initialize2D(inImage.GetMetadata().format, canvasSize, canvasSize, 1, 0, CP_FLAGS_NONE));
+
+    Rect r0(0, 0, fitWidth, fitHeight);
+    message::checkForError(CopyRectangle(*resizedImage.GetImage(0, 0, 0), r0, *outImage.GetImage(0, 0, 0), TEX_FILTER_DEFAULT, offsetX, offsetY));
+
+    message::checkForError(SaveToDDSFile(*outImage.GetImage(0, 0, 0), DDS_FLAGS_NONE, _outputFilePath.c_str()));
 }
 
 AR ClosestSupportedAR(short _width, short _height)
@@ -124,20 +120,20 @@ AR ClosestSupportedAR(short _width, short _height)
 
 AR_MUL::AR_MUL(AR _ar)
 {
-	for(auto& pair : ARtupleArray)
-		if (get<0>(pair) == _ar) {
-			res2kMul = get<1>(pair).res2kMul;
-			res4kMul = get<1>(pair).res4kMul;
-			break;
-		}
+    for(auto& pair : ARtupleArray)
+        if (get<0>(pair) == _ar) {
+            res2kMul = get<1>(pair).res2kMul;
+            res4kMul = get<1>(pair).res4kMul;
+            break;
+        }
 }
 
 OFF_CON::OFF_CON(AR _ar)
 {
-	for (auto& pair : ARtupleArray)
-		if (get<0>(pair) == _ar) {
-			off2k = get<2>(pair).off2k;
-			off4k = get<2>(pair).off4k;
-			break;
-		}
+    for (auto& pair : ARtupleArray)
+        if (get<0>(pair) == _ar) {
+            off2k = get<2>(pair).off2k;
+            off4k = get<2>(pair).off4k;
+            break;
+        }
 };
