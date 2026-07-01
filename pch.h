@@ -2,8 +2,8 @@
 #define _CRT_SECURE_NO_WARNINGS 1
 #define _WIN32_WINNT_WIN10 0x0A00
 
-#define PLUGIN_VERSION 1
-#define PLUGIN_NAME "ALR"
+//#define PLUGIN_VERSION 1
+//#define PLUGIN_NAME "ALR"
 
 #define PLUGIN_PATH_LEN 20
 #define MAX_INPUTS 455

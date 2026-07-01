@@ -104,6 +104,24 @@ void ImageConvert::convert(wstring _inputFilePath, wstring _outputFilePath) {
 
 	message::checkForError(SaveToDDSFile(*outImage.GetImage(0, 0, 0), DDS_FLAGS_NONE, _outputFilePath.c_str()));
 }
+
+AR ClosestSupportedAR(short _width, short _height)
+{
+    double targetRatio = static_cast<double>(_width) / static_cast<double>(_height);
+    AR best = AR(16, 9);
+    double bestDiff = (std::numeric_limits<double>::max)();
+    for (auto& pair : ARtupleArray) {
+        const AR& candidate = get<0>(pair);
+        double candidateRatio = static_cast<double>(candidate.width) / static_cast<double>(candidate.height);
+        double diff = std::abs(candidateRatio - targetRatio);
+        if (diff < bestDiff) {
+            bestDiff = diff;
+            best = candidate;
+        }
+    }
+    return best;
+}
+
 AR_MUL::AR_MUL(AR _ar)
 {
 	for(auto& pair : ARtupleArray)

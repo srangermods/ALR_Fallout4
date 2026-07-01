@@ -25,7 +25,7 @@ public:
 		return (this->width == _ar.width && this->height == _ar.height) ? true : false;
 	}
 };
-
+AR ClosestSupportedAR(short _width, short _height);
 class AR_MUL {
 public:
 	short res2kMul = 0,
@@ -99,7 +99,7 @@ public:
 
 	imageData(short _width, short _height) {
 		res = RES(_width, _height);
-		ar = AR(_width, _height);
+		ar = ClosestSupportedAR(_width, _height);
 		arMul = AR_MUL(ar);
 
 		resMul = _width / ar.width;

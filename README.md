@@ -1,25 +1,12 @@
 
-## AE Build
+##  Build
 ```
 xmake build
-```
-## Building (oldgen via cmake)
-
-```
-git clone https://github.com/ianpatt/common
-git clone https://github.com/ianpatt/f4se
-cmake -B common/build -S common -DCMAKE_INSTALL_PREFIX=extern common
-cmake --build common/build --config Release --target install
-cmake -B f4se/build -S f4se -DCMAKE_INSTALL_PREFIX=extern f4se
-cmake --build f4se/build --config Release
-
-cmake .. -G "Visual Studio 17 2022" -A x64
-cmake --build . --config Release
 ```
 
 ## Changes 
 
-Works for Old gen ( v163) and AE (1191)
+Works for OG, NG, AE (thanks to commonlibf4 from Dear-Modding-FO4)
 
 -Re-implemented/restored source code from original repo this was forked from
 
