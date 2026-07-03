@@ -21,31 +21,46 @@ std::string WideToUtf8(const std::wstring& wstr) {
 ImageConvert::ImageConvert(PathDataParent& _pathData, const std::vector<std::string>& whitelistFileNames)
     : pathData(&_pathData), whitelistFileNames(whitelistFileNames)
 {
-    message::checkForError(CoInitializeEx(NULL, COINIT_APARTMENTTHREADED));
-
     sizeImageData = imageData(pathData->outputWidth, pathData->outputHeight);
-	maxDisplayImageData = imageData(sizeImageData.ar, sizeImageData.arMul, sizeImageData.resMul);
-	
+    maxDisplayImageData = imageData(sizeImageData.ar, sizeImageData.arMul, sizeImageData.resMul);
 
-    createOverlay(path::to_wstring(pathData->overlayPath));
+    // Kicks off the parallel thread team
+    #pragma omp parallel
+    {
+        // Set up COM Multi-Threaded Apartment for this specific worker thread
+        HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
 
-    for (int i = 0; i < MAX_INPUTS; i++) {
-        std::wstring outputFilePathW = path::to_wstring(pathData->outputPaths.at(i));
-        std::string filename = std::filesystem::path(outputFilePathW).filename().string();
+        // Every thread gets its own unique pre-allocated canvases on its own stack frame
+        ScratchImage threadCanvas2k, threadCanvas4k;
+        threadCanvas2k.Initialize2D(DXGI_FORMAT_R8G8B8A8_UNORM, 2048, 2048, 1, 0, CP_FLAGS_NONE);
+        threadCanvas4k.Initialize2D(DXGI_FORMAT_R8G8B8A8_UNORM, 4096, 4096, 1, 0, CP_FLAGS_NONE);
 
-        // Skip conversion if filename is in whitelist
-        if (std::find(whitelistFileNames.begin(), whitelistFileNames.end(), filename) != whitelistFileNames.end()) {
-            //_MESSAGE("Skipping conversion for whitelisted file: %s", filename.c_str());
-            continue;
+        // Safely distribute the iterations across the initialized threads
+        #pragma omp for
+        for (int i = 0; i < MAX_INPUTS; i++) {
+            std::wstring outputFilePathW = path::to_wstring(pathData->outputPaths.at(i));
+            std::string filename = std::filesystem::path(outputFilePathW).filename().string();
+
+            if (std::find(whitelistFileNames.begin(), whitelistFileNames.end(), filename) != whitelistFileNames.end()) {
+                continue;
+            }
+
+            // Pass the thread-safe local canvases
+            convert(path::to_wstring(pathData->inputFilePaths.at(i)), outputFilePathW, threadCanvas2k, threadCanvas4k);
         }
-        convert(path::to_wstring(pathData->inputFilePaths.at(i)), path::to_wstring(pathData->outputPaths.at(i)));
+
+        if (SUCCEEDED(hr)) {
+            CoUninitialize();
+        }
     }
 
-    if (pathData->backgroundReplace) {
-        maxDisplayImageData = imageData(AR(2, 1), sizeImageData.res4k);
-        outputAR = AR(2, 1);
-        convertBackgroundReplace(path::to_wstring(pathData->inputFilePaths.at(0)), path::to_wstring(pathData->backgroundPath));
-    }
+    // Background replacement and overlay happen sequentially after threads join
+    //if (pathData->backgroundReplace) {
+    //    maxDisplayImageData = imageData(AR(2, 1), sizeImageData.res4k);
+    //    outputAR = AR(2, 1);
+    //    convertBackgroundReplace(path::to_wstring(pathData->inputFilePaths.at(0)), path::to_wstring(pathData->backgroundPath));
+    //}
+    createOverlay(path::to_wstring(pathData->overlayPath));
 }
 
 void ImageConvert::convertBackgroundReplace(wstring _inputFilePath, wstring _outputFilePath) {
@@ -58,6 +73,7 @@ void ImageConvert::convertBackgroundReplace(wstring _inputFilePath, wstring _out
 		message::checkForError(LoadFromDDSFile(_inputFilePath.c_str(), DDS_FLAGS_NONE, &inImageInfo, inImage));
 	else 
 		message::checkForError(LoadFromWICFile(_inputFilePath.c_str(), WIC_FLAGS_NONE, &inImageInfo, inImage));
+
 
 	if (IsCompressed(inImage.GetMetadata().format)) {
 		////_MESSAGE("image is compressed");
@@ -102,49 +118,57 @@ void ImageConvert::createOverlay(wstring _outputFilePath)
     message::checkForError(SaveToDDSFile(*overlayImage.GetImage(0, 0, 0), DDS_FLAGS_NONE, _outputFilePath.c_str()));
 }
 
-void ImageConvert::convert(wstring _inputFilePath, wstring _outputFilePath) {
+void ImageConvert::convert(wstring _inputFilePath, wstring _outputFilePath, ScratchImage& reusable2kCanvas, 
+    ScratchImage& reusable4kCanvas) {
 
     TexMetadata inImageInfo;
-    ScratchImage inImage, outImage, deCompressedImage;
+    ScratchImage inImage;
 
+    // 1. Disk I/O: Load file
     if (path::getExtension(_inputFilePath) == L"dds")
         message::checkForError(LoadFromDDSFile(_inputFilePath.c_str(), DDS_FLAGS_NONE, &inImageInfo, inImage));
     else
         message::checkForError(LoadFromWICFile(_inputFilePath.c_str(), WIC_FLAGS_NONE, &inImageInfo, inImage));
 
-    if (IsCompressed(inImage.GetMetadata().format)) {
-        message::checkForError(Decompress(*inImage.GetImage(0, 0, 0), DXGI_FORMAT_R8G8B8A8_UNORM, deCompressedImage));
-        inImage = std::move(deCompressedImage);
+    const Image* workingImage = inImage.GetImage(0, 0, 0);
+    ScratchImage deCompressedImage;
+
+    // 2. Decompress only if needed
+    if (IsCompressed(inImageInfo.format)) {
+        message::checkForError(Decompress(*workingImage, DXGI_FORMAT_R8G8B8A8_UNORM, deCompressedImage));
+        workingImage = deCompressedImage.GetImage(0, 0, 0);
+        inImageInfo = deCompressedImage.GetMetadata();
     }
 
-    // Detect a 4K-resolution input and bump the output canvas up accordingly
-    // so quality isn't lost by downscaling into a 2K canvas.
-    const auto& meta = inImage.GetMetadata();
-    const bool isFourK = (meta.width == 3840 && meta.height == 2160);
+    // 3. Size Calculations
+    const bool isFourK = (inImageInfo.width >= 3840 && inImageInfo.height >= 2160);
     const long canvasSize = isFourK ? 4096 : 2048;
 
-    const double srcWidth = static_cast<double>(meta.width);
-    const double srcHeight = static_cast<double>(meta.height);
-    const double srcRatio = srcWidth / srcHeight;
-    const double ultrawideThreshold = 16.0 / 9.0;
+    long offsetX = canvasSize * 64 / 2048;
+    long offsetY = canvasSize * 484 / 2048;
+    long fitWidth = canvasSize - 2 * offsetX;
+    long fitHeight = canvasSize - 2 * offsetY;
 
+    // 4. Resize
     ScratchImage resizedImage;
-    long fitWidth, fitHeight, offsetX, offsetY;
+    message::checkForError(Resize(*workingImage, fitWidth, fitHeight, TEX_FILTER_DEFAULT, resizedImage));
 
-	    offsetX = canvasSize * 64 / 2048;
-	    offsetY = canvasSize * 484 / 2048;
-	    fitWidth = canvasSize - 2 * offsetX;
-	    fitHeight = canvasSize - 2 * offsetY;
+    // 5. Select our pre-allocated canvas (Zero allocation cost!)
+    ScratchImage& finalCanvas = isFourK ? reusable4kCanvas : reusable2kCanvas;
 
-
-    message::checkForError(Resize(*inImage.GetImage(0, 0, 0), fitWidth, fitHeight, TEX_FILTER_DEFAULT, resizedImage));
-
-    message::checkForError(outImage.Initialize2D(inImage.GetMetadata().format, canvasSize, canvasSize, 1, 0, CP_FLAGS_NONE));
-
+    // 6. Blit the image into the pre-allocated memory
     Rect r0(0, 0, fitWidth, fitHeight);
-    message::checkForError(CopyRectangle(*resizedImage.GetImage(0, 0, 0), r0, *outImage.GetImage(0, 0, 0), TEX_FILTER_DEFAULT, offsetX, offsetY));
+    message::checkForError(CopyRectangle(
+        *resizedImage.GetImage(0, 0, 0), 
+        r0, 
+        *finalCanvas.GetImage(0, 0, 0), 
+        TEX_FILTER_DEFAULT, 
+        offsetX, 
+        offsetY
+    ));
 
-    message::checkForError(SaveToDDSFile(*outImage.GetImage(0, 0, 0), DDS_FLAGS_NONE, _outputFilePath.c_str()));
+    // 7. Disk I/O: Save
+    message::checkForError(SaveToDDSFile(*finalCanvas.GetImage(0, 0, 0), DDS_FLAGS_NONE, _outputFilePath.c_str()));
 }
 
 AR ClosestSupportedAR(short _width, short _height)

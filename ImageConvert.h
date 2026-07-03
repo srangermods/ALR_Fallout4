@@ -149,7 +149,8 @@ private:
 
 	PathDataParent* pathData = NULL;
 	std::vector<std::string> whitelistFileNames;
-	void convert(wstring _inputFilePath, wstring _outputFilePath),
+	void convert(wstring _inputFilePath, wstring _outputFilePath,ScratchImage& reusable2kCanvas, 
+    ScratchImage& reusable4kCanvas),
 		convertBackgroundReplace(wstring _inputFilePath, wstring _outputFilePath),
 		createOverlay(wstring _outputFilePath);
 

@@ -2,8 +2,10 @@
 includes("lib/commonlibf4")
 
 local plugin_name = "ALR"
-local plugin_version = "1.2.2"
+local plugin_version = "1.2.3"
 local plugin_version_major, plugin_version_minor, plugin_version_patch = plugin_version:match("^(%d+)%.(%d+)%.(%d+)$")
+
+add_requires("openmp")
 
 -- set project constants
 set_project("ALR_Fallout4")
@@ -19,7 +21,6 @@ add_cxflags("/wd4244") -- disable warning C4244
 add_rules("mode.debug", "mode.releasedbg")
 --add_rules("mode.release", "mode.releasedbg")
 add_rules("plugin.vsxmake.autoupdate")
-
 -- override runtime count
 add_defines("COMMONLIB_RUNTIMECOUNT=3")
 
@@ -30,6 +31,8 @@ target(plugin_name)
         author = "srangermods",
         description = "improved ALR built using commonlibf4"
     })
+
+    add_packages("openmp")
 
     -- add src files
     add_files(

@@ -106,7 +106,7 @@ void PathBuilder::readInis()
 	auto settings = parseIni(pathData->iniPath);
 
     bool enableGen = parseBool(settings["EnableLoadingScreenGeneration"]);
-    bool overrideBG = parseBool(settings["EnableOverrideDefaultBackgroundImage"]);
+    //bool overrideBG = parseBool(settings["EnableOverrideDefaultBackgroundImage"]);
     std::vector<int> whitelist = parseIntList(settings["WhitelistImageFilesFromRegeneration"]);
     // Debug print
     // Debug print
@@ -130,7 +130,7 @@ void PathBuilder::readInis()
 	//if (in.get() == '1')
 	//	dOverlayRD = true;
 
-	pathData->backgroundReplace = overrideBG;
+	pathData->backgroundReplace = false;
 
 	in.close();
 
