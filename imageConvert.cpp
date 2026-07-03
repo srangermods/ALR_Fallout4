@@ -24,7 +24,9 @@ ImageConvert::ImageConvert(PathDataParent& _pathData, const std::vector<std::str
     sizeImageData = imageData(pathData->outputWidth, pathData->outputHeight);
     maxDisplayImageData = imageData(sizeImageData.ar, sizeImageData.arMul, sizeImageData.resMul);
 
+    createOverlay(path::to_wstring(pathData->overlayPath));
     // Kicks off the parallel thread team
+
     #pragma omp parallel
     {
         // Set up COM Multi-Threaded Apartment for this specific worker thread
@@ -60,7 +62,6 @@ ImageConvert::ImageConvert(PathDataParent& _pathData, const std::vector<std::str
     //    outputAR = AR(2, 1);
     //    convertBackgroundReplace(path::to_wstring(pathData->inputFilePaths.at(0)), path::to_wstring(pathData->backgroundPath));
     //}
-    createOverlay(path::to_wstring(pathData->overlayPath));
 }
 
 void ImageConvert::convertBackgroundReplace(wstring _inputFilePath, wstring _outputFilePath) {
@@ -125,10 +126,12 @@ void ImageConvert::convert(wstring _inputFilePath, wstring _outputFilePath, Scra
     ScratchImage inImage;
 
     // 1. Disk I/O: Load file
-    if (path::getExtension(_inputFilePath) == L"dds")
+    if (path::getExtension(_inputFilePath) == L"dds") {
         message::checkForError(LoadFromDDSFile(_inputFilePath.c_str(), DDS_FLAGS_NONE, &inImageInfo, inImage));
-    else
-        message::checkForError(LoadFromWICFile(_inputFilePath.c_str(), WIC_FLAGS_NONE, &inImageInfo, inImage));
+    } else {
+        // Add WIC_FLAGS_IGNORE_SRGB here to prevent the dark shift!
+        message::checkForError(LoadFromWICFile(_inputFilePath.c_str(), WIC_FLAGS_IGNORE_SRGB, &inImageInfo, inImage));
+    }
 
     const Image* workingImage = inImage.GetImage(0, 0, 0);
     ScratchImage deCompressedImage;
@@ -140,14 +143,38 @@ void ImageConvert::convert(wstring _inputFilePath, wstring _outputFilePath, Scra
         inImageInfo = deCompressedImage.GetMetadata();
     }
 
-    // 3. Size Calculations
-    const bool isFourK = (inImageInfo.width >= 3840 && inImageInfo.height >= 2160);
+// 3. Size Calculations (Aspect Ratio Aware)
+    const bool isFourK = (inImageInfo.width >= 3840 || inImageInfo.height >= 2160);
     const long canvasSize = isFourK ? 4096 : 2048;
 
-    long offsetX = canvasSize * 64 / 2048;
-    long offsetY = canvasSize * 484 / 2048;
-    long fitWidth = canvasSize - 2 * offsetX;
-    long fitHeight = canvasSize - 2 * offsetY;
+    // Base Fallout 4 safe-zone boundaries (16:9 box)
+    long maxOffsetX = canvasSize * 64 / 2048;
+    long maxOffsetY = canvasSize * 484 / 2048;
+    long maxFitWidth = canvasSize - 2 * maxOffsetX;
+    long maxFitHeight = canvasSize - 2 * maxOffsetY;
+
+    // Calculate aspect ratios
+    double inputAspectRatio = static_cast<double>(inImageInfo.width) / inImageInfo.height;
+    double targetAspectRatio = static_cast<double>(maxFitWidth) / maxFitHeight;
+
+    long fitWidth = maxFitWidth;
+    long fitHeight = maxFitHeight;
+    long offsetX = maxOffsetX;
+    long offsetY = maxOffsetY;
+
+    if (inputAspectRatio > targetAspectRatio) {
+        // Image is wider than 16:9 (e.g., 21:9, 32:9 ultra-wide)
+        // Fit to width, scale down height, and center vertically
+        fitWidth = maxFitWidth;
+        fitHeight = static_cast<long>(maxFitWidth / inputAspectRatio);
+        offsetY = maxOffsetY + (maxFitHeight - fitHeight) / 2;
+    } else {
+        // Image is taller than 16:9 (e.g., 4:3, 1:1 portrait)
+        // Fit to height, scale down width, and center horizontally
+        fitHeight = maxFitHeight;
+        fitWidth = static_cast<long>(maxFitHeight * inputAspectRatio);
+        offsetX = maxOffsetX + (maxFitWidth - fitWidth) / 2;
+    }
 
     // 4. Resize
     ScratchImage resizedImage;
@@ -156,7 +183,7 @@ void ImageConvert::convert(wstring _inputFilePath, wstring _outputFilePath, Scra
     // 5. Select our pre-allocated canvas (Zero allocation cost!)
     ScratchImage& finalCanvas = isFourK ? reusable4kCanvas : reusable2kCanvas;
 
-    // 6. Blit the image into the pre-allocated memory
+    // 6. Blit the image into the pre-allocated memory using dynamic offsets
     Rect r0(0, 0, fitWidth, fitHeight);
     message::checkForError(CopyRectangle(
         *resizedImage.GetImage(0, 0, 0), 

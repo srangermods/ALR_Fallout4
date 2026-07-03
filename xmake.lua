@@ -2,7 +2,7 @@
 includes("lib/commonlibf4")
 
 local plugin_name = "ALR"
-local plugin_version = "1.2.4"
+local plugin_version = "1.2.5"
 local plugin_version_major, plugin_version_minor, plugin_version_patch = plugin_version:match("^(%d+)%.(%d+)%.(%d+)$")
 
 add_requires("openmp")
@@ -45,7 +45,7 @@ target(plugin_name)
         "pch.cpp"
     )
     add_headerfiles("**.h")
-    add_includedirs("DirectXTex-mar2025/DirectXTex")
+    add_includedirs("DirectXTex/DirectXTex")
     add_links("extern/lib/DirectXTex") 
     set_pcxxheader("pch.h")
     
