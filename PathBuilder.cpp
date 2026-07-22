@@ -100,12 +100,19 @@ void PathBuilder::readInis()
 	message::checkForFalseError(in.is_open(), "ALR.ini Not Found");
 
 
-	findImgDir();
+	
 	firstTimeCheck();
 
 	auto settings = parseIni(pathData->iniPath);
 
     bool enableGen = parseBool(settings["EnableLoadingScreenGeneration"]);
+	std::string customFilePath = settings["ImageSourcePath"];
+
+	if (!customFilePath.empty()) {
+	    inputPath = customFilePath;
+	} else {
+	    findImgDir();
+	}
     //bool overrideBG = parseBool(settings["EnableOverrideDefaultBackgroundImage"]);
     std::vector<int> whitelist = parseIntList(settings["WhitelistImageFilesFromRegeneration"]);
     // Debug print
