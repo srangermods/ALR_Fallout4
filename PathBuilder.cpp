@@ -3,7 +3,7 @@
 
 PathBuilder::PathBuilder(PathDataParent& _pathData) : pathData(&_pathData)
 {
-	rebuildIniFlag = dImageRD = dOverlayRD = false;
+	rebuildIniFlag = dImageRD = dOverlayRD = dRandomizeModLoadScreensRD = false;
 
 	findDLLPath();
 	findPrefPath();
@@ -106,6 +106,7 @@ void PathBuilder::readInis()
 	auto settings = parseIni(pathData->iniPath);
 
     bool enableGen = parseBool(settings["EnableLoadingScreenGeneration"]);
+    bool enableRandomizeModLoadScreens = parseBool(settings["enableRandomizeModLoadScreens"]);
 	std::string customFilePath = settings["ImageSourcePath"];
 
 	if (!customFilePath.empty()) {
@@ -132,6 +133,7 @@ void PathBuilder::readInis()
 
 
 	dImageRD = enableGen;
+	dRandomizeModLoadScreensRD = enableRandomizeModLoadScreens;
 	//in.ignore((numeric_limits<streamsize>::max)(), ':');
 
 	//if (in.get() == '1')

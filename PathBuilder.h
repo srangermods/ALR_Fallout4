@@ -6,7 +6,8 @@
 class PathBuilderParent {
 public:
 	virtual ~PathBuilderParent() {}
-	virtual bool IsImageRD() const = 0;  // New interface
+	virtual bool IsImageRD() const = 0; 
+	virtual bool RandomizeModLoadScreens() const = 0;
 };
 
 class PathBuilder : public PathBuilderParent {
@@ -33,6 +34,7 @@ private:
 
 	bool verifyImages(),
 		dImageRD,
+		dRandomizeModLoadScreensRD,
 		dOverlayRD,
 		rebuildIniFlag;
 
@@ -40,5 +42,7 @@ public:
 	std::vector<std::string> whitelistFileNames;
 	PathBuilder(PathDataParent& _pathData);
 	~PathBuilder();
-	bool IsImageRD() const override { return dImageRD; }  // Implementation
+	bool IsImageRD() const override { return dImageRD; }
+	bool RandomizeModLoadScreens() const override {return dRandomizeModLoadScreensRD; }
+
 };

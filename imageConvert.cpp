@@ -25,8 +25,8 @@ ImageConvert::ImageConvert(PathDataParent& _pathData, const std::vector<std::str
     maxDisplayImageData = imageData(sizeImageData.ar, sizeImageData.arMul, sizeImageData.resMul);
 
     createOverlay(path::to_wstring(pathData->overlayPath));
-    // Kicks off the parallel thread team
 
+    // Kicks off the parallel thread team
     #pragma omp parallel
     {
         // Set up COM Multi-Threaded Apartment for this specific worker thread
@@ -63,6 +63,7 @@ ImageConvert::ImageConvert(PathDataParent& _pathData, const std::vector<std::str
     //    convertBackgroundReplace(path::to_wstring(pathData->inputFilePaths.at(0)), path::to_wstring(pathData->backgroundPath));
     //}
 }
+
 
 void ImageConvert::convertBackgroundReplace(wstring _inputFilePath, wstring _outputFilePath) {
 
