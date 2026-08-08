@@ -6,7 +6,7 @@ class PathDataParent {
 
 public:
 	vector<string> inputFilePaths;
-	array<string, MAX_INPUTS> outputPaths;
+	vector<string> outputPaths;
 	string overlayPath, backgroundPath;
 	string iniPath;
 	int outputHeight, outputWidth;

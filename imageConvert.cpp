@@ -39,7 +39,7 @@ ImageConvert::ImageConvert(PathDataParent& _pathData, const std::vector<std::str
 
         // Safely distribute the iterations across the initialized threads
         #pragma omp for
-        for (int i = 0; i < MAX_INPUTS; i++) {
+        for (int i = 0; i < pathData->inputFilePaths.size(); i++) {
             std::wstring outputFilePathW = path::to_wstring(pathData->outputPaths.at(i));
             std::string filename = std::filesystem::path(outputFilePathW).filename().string();
 
@@ -55,13 +55,6 @@ ImageConvert::ImageConvert(PathDataParent& _pathData, const std::vector<std::str
             CoUninitialize();
         }
     }
-
-    // Background replacement and overlay happen sequentially after threads join
-    //if (pathData->backgroundReplace) {
-    //    maxDisplayImageData = imageData(AR(2, 1), sizeImageData.res4k);
-    //    outputAR = AR(2, 1);
-    //    convertBackgroundReplace(path::to_wstring(pathData->inputFilePaths.at(0)), path::to_wstring(pathData->backgroundPath));
-    //}
 }
 
 
@@ -126,6 +119,8 @@ void ImageConvert::convert(wstring _inputFilePath, wstring _outputFilePath, Scra
     TexMetadata inImageInfo;
     ScratchImage inImage;
 
+    spdlog::info("converting input image: {}",
+    std::filesystem::path(_inputFilePath).string());
     // 1. Disk I/O: Load file
     if (path::getExtension(_inputFilePath) == L"dds") {
         message::checkForError(LoadFromDDSFile(_inputFilePath.c_str(), DDS_FLAGS_NONE, &inImageInfo, inImage));

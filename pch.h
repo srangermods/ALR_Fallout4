@@ -10,6 +10,7 @@
 
 #define NOMINMAX
 
+#include <spdlog/spdlog.h>
 #include <RE/Fallout.h>
 #include <F4SE/F4SE.h>
 #include <Windows.h>

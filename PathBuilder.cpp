@@ -9,7 +9,7 @@ PathBuilder::PathBuilder(PathDataParent& _pathData) : pathData(&_pathData)
 	findPrefPath();
 	readInis();
 	//if (rebuildIniFlag) rebuildIni();
-	generateOutputPaths();
+	
 
 	if (!dImageRD){
 		//_MESSAGE("Disable deleting and reloading images.");
@@ -27,15 +27,10 @@ PathBuilder::PathBuilder(PathDataParent& _pathData) : pathData(&_pathData)
 		buildTextureDir();
 		verifyFiles();
 		findInputFiles();
-		if (pathData->inputFilePaths.size() != MAX_INPUTS) correctFiles();
+		if (pathData->inputFilePaths.size() > MAX_INPUTS) correctFiles();
 		generateInputPaths();
+		generateOutputPaths();
 	}
-	//else if (!dOverlayRD) {
-
-	//}
-	//else if (!dImageRD) {
-
-	//}
 }
 
 PathBuilder::~PathBuilder()
@@ -242,6 +237,15 @@ void PathBuilder::findDLLPath() {
 	backgroundPath = dataPathSS.str() + "Textures\\Interface\\";
 }
 
+int PathBuilder::countOutputPathFiles(){
+	std::size_t fileCount = 0;
+	for (const auto& entry : std::filesystem::directory_iterator(outputPath)) {
+	    if (entry.is_regular_file() && entry.path().extension() == ".DDS") {
+	        ++fileCount;
+	    }
+	}
+	return fileCount;
+}
 void PathBuilder::findPrefPath()
 {
 	char path[MAX_PATH];
@@ -269,12 +273,10 @@ void PathBuilder::correctFiles() {
 	random_device rd;
 	mt19937 g(rd());
 
-	if (inputFiles.size() > MAX_INPUTS) {
-		shuffle(inputFiles.begin(), inputFiles.end(), g);
-		inputFiles.resize(MAX_INPUTS);
+	shuffle(inputFiles.begin(), inputFiles.end(), g);
+	inputFiles.resize(MAX_INPUTS);
 
-	}
-	else if (inputFiles.size() < MAX_INPUTS) {
+/*	else if (inputFiles.size() < MAX_INPUTS) {
 
 		vector<string> tCopy = inputFiles;
 		for (int i = 0; inputFiles.size() < MAX_INPUTS; i++) {
@@ -282,22 +284,24 @@ void PathBuilder::correctFiles() {
 			inputFiles.insert(inputFiles.end(), tCopy.begin(), tCopy.end());
 		}
 		inputFiles.resize(MAX_INPUTS);
-	}
+	}*/
 }
 
 void PathBuilder::generateInputPaths() {
-	random_device rd;
-	mt19937 g(rd());
-	shuffle(inputFiles.begin(), inputFiles.end(), g);
+	//random_device rd;
+	//mt19937 g(rd());
+	//shuffle(inputFiles.begin(), inputFiles.end(), g);
 	
 	for (auto& inputFile : inputFiles)
 		pathData->inputFilePaths.emplace_back(inputFile);
 }
 
 void PathBuilder::generateOutputPaths() {
-	for (int i = 0; i < MAX_INPUTS; i++) 
-		pathData->outputPaths.at(i) = outputPath + to_string(i) + ".DDS";
-	
+	string outputPathFileName = "";
+	for (int i = 0; i < pathData->inputFilePaths.size(); i++){ 
+		outputPathFileName = outputPath + to_string(i) + ".DDS";
+		pathData->outputPaths.emplace_back( outputPathFileName);
+	}
 	pathData->overlayPath = overlayPath + "Overlay01_d.DDS";
 
 	if(pathData->backgroundReplace)

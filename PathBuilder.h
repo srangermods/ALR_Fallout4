@@ -43,6 +43,7 @@ public:
 	PathBuilder(PathDataParent& _pathData);
 	~PathBuilder();
 	bool IsImageRD() const override { return dImageRD; }
+	int countOutputPathFiles();
 	bool RandomizeModLoadScreens() const override {return dRandomizeModLoadScreensRD; }
 
 };

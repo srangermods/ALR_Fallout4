@@ -4,7 +4,7 @@
 #include "PathDestroyer.h"
 #include "ImageConvert.h"
 #include "PathData.h"
-#include <spdlog/spdlog.h>
+
 
 __declspec(dllexport) PathDataParent* PathDataCreate()
 {
@@ -41,11 +41,12 @@ void OnF4SEMessage(F4SE::MessagingInterface::Message* a_msg)
             }
             
         });
-
         // Detach the thread so it runs independently in the background 
         // without blocking F4SE or the game's startup pipeline
         workerThread.detach();
+        
     }
+
     if (a_msg->type == F4SE::MessagingInterface::kGameDataReady){
         //Randomize Vanilla Load Screens (respect whitelist)
         auto* dataHandler = RE::TESDataHandler::GetSingleton();
@@ -59,10 +60,10 @@ void OnF4SEMessage(F4SE::MessagingInterface::Message* a_msg)
             "ccBGSFO4115-X02.esl"sv,
             "ccSBJFO4003-Grenade.esl"sv,
             };
-        std::vector<RE::TESBoundObject*> vanillaLoadNifs;
+        std::unordered_map<int, RE::TESBoundObject*> vanillaLoadNifs;
         RE::BGSTransform* sharedTransform = nullptr;
         std::vector<RE::TESLoadScreen*>  modLoadScreens;
-        std::vector<RE::TESLoadScreen*>  vanillaLoadScreens;
+        std::unordered_map<int, RE::TESLoadScreen*> vanillaLoadScreens;
         std::vector<const RE::TESFile*> excludedFiles;
         excludedFiles.reserve(kVanillaPlugins.size());
 
@@ -86,8 +87,18 @@ void OnF4SEMessage(F4SE::MessagingInterface::Message* a_msg)
                 [formID](const RE::TESFile* f) { return f->IsFormInMod(formID); });
 
             if (isExcluded) {
-                vanillaLoadNifs.push_back(lscr->loadNIFData->loadNif);
-                vanillaLoadScreens.push_back(lscr);
+                const char* editorID = lscr->GetFormEditorID();
+                std::string cleanID;
+                if (editorID) {
+                    cleanID = editorID;
+                    // Check if the string starts with "LS"
+                    if (cleanID.rfind("LS", 0) == 0) { // Or cleanID.starts_with("LS") in C++20
+                        cleanID = cleanID.substr(2);   // Extract everything starting at index 2
+                    }
+                }
+                int lsID = std::stoi(cleanID);
+                vanillaLoadNifs[lsID] = lscr->loadNIFData->loadNif;
+                vanillaLoadScreens[lsID] = lscr;
                 if (!sharedTransform) {
                     sharedTransform = lscr->loadNIFData->transform;
                 }
@@ -95,43 +106,50 @@ void OnF4SEMessage(F4SE::MessagingInterface::Message* a_msg)
                 modLoadScreens.push_back(lscr);
             }
         }
+
+        // Build donor pool: only vanilla LSCRs whose LS<n> is within the generated-image range
+        std::vector<int> donorKeys;
+        donorKeys.reserve(vanillaLoadNifs.size());
+        int outputPathFiles = realPBinst->countOutputPathFiles();
+        for (const auto& [key, nif] : vanillaLoadNifs) {
+            if (key >= 0 && static_cast<std::size_t>(key) < outputPathFiles) {
+                donorKeys.push_back(key);
+            }
+        }
         std::mt19937 rng{ std::random_device{}() };
-        std::uniform_int_distribution<std::size_t> dist(0, vanillaLoadNifs.size() - 1);
-        for (auto* lscr : vanillaLoadScreens) {
-            //if lscr not in whitelist
-            const char* editorID = lscr->GetFormEditorID();
-            //spdlog::info("LSCR Editor ID: {}"sv, lscr->GetFormEditorID());
-            std::string cleanID;
-            if (editorID) {
-                cleanID = editorID;
-                // Check if the string starts with "LS"
-                if (cleanID.rfind("LS", 0) == 0) { // Or cleanID.starts_with("LS") in C++20
-                    cleanID = cleanID.substr(2);   // Extract everything starting at index 2
+        std::uniform_int_distribution<std::size_t> keyDist(0, donorKeys.size() - 1);
+        if (donorKeys.empty()) {
+            spdlog::warn("No vanilla load screens found within the generated-image range; skipping randomization");
+        } else {
+            
+
+            for (const auto& [key, lscr] : vanillaLoadScreens) {
+                std::string cleanID = std::to_string(key) + ".DDS";
+                if (std::find(realPBinst->whitelistFileNames.begin(), realPBinst->whitelistFileNames.end(), cleanID) != realPBinst->whitelistFileNames.end()) {
+                    continue;
                 }
-                cleanID += ".DDS";
-            }
-            //spdlog::info("cleaned ID: {}"sv, cleanID);
 
-            if (std::find(realPBinst->whitelistFileNames.begin(), realPBinst->whitelistFileNames.end(), cleanID) != realPBinst->whitelistFileNames.end()) {
-                continue;
-            }
+                auto* data = lscr->loadNIFData;
+                int donorKey = donorKeys[keyDist(rng)];
+                std::string strFileName = std::to_string(donorKey) + ".DDS";
+                if (std::find(realPBinst->whitelistFileNames.begin(), realPBinst->whitelistFileNames.end(), strFileName) != realPBinst->whitelistFileNames.end()) {
+                    continue;
+                }
 
-            auto* data = lscr->loadNIFData;
-            int LoadNifIndex = dist(rng);
-            std::string strFileName = std::to_string(LoadNifIndex);
-            strFileName += ".DDS";
-            if (std::find(realPBinst->whitelistFileNames.begin(), realPBinst->whitelistFileNames.end(), strFileName) != realPBinst->whitelistFileNames.end()) {
-                continue;
+                auto* donor = vanillaLoadNifs[donorKey];  // guaranteed present: donorKey came from donorKeys, built from this same map
+
+                spdlog::info("vanilla LSCR {:08X}: loadNif {:08X} -> {:08X}",
+                    lscr->GetFormID(), data->loadNif->GetFormID(), donor->GetFormID());
+                data->loadNif = donor;
             }
-            auto* donor = vanillaLoadNifs[dist(rng)];
-            data->loadNif               = donor;
         }
         if (PBinst->RandomizeModLoadScreens()){            
             for (auto* lscr : modLoadScreens) {
                 auto* data = lscr->loadNIFData;
-                auto* donor = vanillaLoadNifs[dist(rng)];
+                int donorKey = donorKeys[keyDist(rng)];  
+                auto* donor = vanillaLoadNifs[donorKey];
 
-                spdlog::info("LSCR {:08X}: loadNif {:08X} -> {:08X}",
+                spdlog::info("mod LSCR {:08X}: loadNif {:08X} -> {:08X}",
                     lscr->GetFormID(), data->loadNif->GetFormID(), donor->GetFormID());
 
                 data->loadNif               = donor;
@@ -141,8 +159,8 @@ void OnF4SEMessage(F4SE::MessagingInterface::Message* a_msg)
                 data->zoomConstraints[0]     = 0.0f;
                 data->zoomConstraints[1]     = 0.0f;
             }
-            spdlog::info("Randomized {} of {} load screens ({} vanilla donors)",
-                modLoadScreens.size(), modLoadScreens.size(), vanillaLoadNifs.size());
+            spdlog::info("Randomized {} mod load screens ({} vanilla donors)",
+             modLoadScreens.size(), vanillaLoadNifs.size());
         }
     delete PBinst;
     }
