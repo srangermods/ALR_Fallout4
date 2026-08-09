@@ -27,7 +27,7 @@ PathBuilder::PathBuilder(PathDataParent& _pathData) : pathData(&_pathData)
 		buildTextureDir();
 		verifyFiles();
 		findInputFiles();
-		if (pathData->inputFilePaths.size() > MAX_INPUTS) correctFiles();
+		correctFiles();
 		generateInputPaths();
 		generateOutputPaths();
 	}
@@ -44,32 +44,42 @@ bool parseBool(const std::string& val) {
     return lower == "1" || lower == "true" || lower == "yes";
 }
 
-std::vector<int> parseIntList(const std::string& line) {
-    std::vector<int> result;
-    std::stringstream ss(line);
-    std::string token;
-    while (std::getline(ss, token, ',')) {
-        token.erase(0, token.find_first_not_of(" \t"));
-        token.erase(token.find_last_not_of(" \t") + 1);
-        try {
-            result.push_back(std::stoi(token));
-        } catch (...) {
-            // skip invalid entries
-        }
-    }
-    return result;
-}
 
-std::unordered_map<std::string, std::string> parseIni(const std::string& filename) {
+std::unordered_map<std::string, std::string> parseIni(
+    const std::string& filename,
+    std::vector<WhitelistEntry>& whitelist)
+{
     std::ifstream file(filename);
     std::unordered_map<std::string, std::string> settings;
 
     std::string line;
+    std::string currentSection;
+
     while (std::getline(file, line)) {
-        // Remove comments and whitespace
+        // Remove comments
         size_t commentPos = line.find_first_of(";#");
         if (commentPos != std::string::npos)
             line = line.substr(0, commentPos);
+
+        // Trim whitespace
+        line.erase(0, line.find_first_not_of(" \t"));
+        line.erase(line.find_last_not_of(" \t") + 1);
+
+        // Skip empty lines
+        if (line.empty())
+            continue;
+
+        // Check for section header
+        if (line.front() == '[' && line.back() == ']') {
+            currentSection = line.substr(1, line.size() - 2);
+
+            // Trim section name
+            currentSection.erase(0, currentSection.find_first_not_of(" \t"));
+            currentSection.erase(currentSection.find_last_not_of(" \t") + 1);
+
+            continue;
+        }
+
         size_t equals = line.find('=');
         if (equals == std::string::npos)
             continue;
@@ -80,15 +90,51 @@ std::unordered_map<std::string, std::string> parseIni(const std::string& filenam
         // Trim whitespace
         key.erase(0, key.find_first_not_of(" \t"));
         key.erase(key.find_last_not_of(" \t") + 1);
+
         value.erase(0, value.find_first_not_of(" \t"));
         value.erase(value.find_last_not_of(" \t") + 1);
 
+        if (key.empty() || value.empty())
+            continue;
+
+        // Handle [Whitelist]
+        if (currentSection == "Whitelist") {
+            size_t colon = key.find(':');
+
+            if (colon == std::string::npos)
+                continue;
+
+            int formID = std::stoi(key.substr(0, colon), nullptr, 0);
+            std::string plugin = key.substr(colon + 1);
+
+            // Trim plugin whitespace
+            plugin.erase(0, plugin.find_first_not_of(" \t"));
+            plugin.erase(plugin.find_last_not_of(" \t") + 1);
+
+            try {
+                int whitelistValue = std::stoi(value);
+
+                whitelist.push_back({
+                    formID,
+                    plugin,
+                    whitelistValue
+                });
+            }
+            catch (...) {
+                // Invalid whitelist entry; skip it
+            }
+
+            continue;
+        }
+
+        // Normal ALR.ini setting
         if (!key.empty())
             settings[key] = value;
     }
 
     return settings;
 }
+
 void PathBuilder::readInis()
 {
 	ifstream in(pathData->iniPath);
@@ -97,11 +143,10 @@ void PathBuilder::readInis()
 
 	
 	firstTimeCheck();
-
-	auto settings = parseIni(pathData->iniPath);
+	whitelist.clear();
+	auto settings = parseIni(pathData->iniPath, whitelist);
 
     bool enableGen = parseBool(settings["EnableLoadingScreenGeneration"]);
-    bool enableRandomizeModLoadScreens = parseBool(settings["enableRandomizeModLoadScreens"]);
 	std::string customFilePath = settings["ImageSourcePath"];
 
 	if (!customFilePath.empty()) {
@@ -109,30 +154,9 @@ void PathBuilder::readInis()
 	} else {
 	    findImgDir();
 	}
-    //bool overrideBG = parseBool(settings["EnableOverrideDefaultBackgroundImage"]);
-    std::vector<int> whitelist = parseIntList(settings["WhitelistImageFilesFromRegeneration"]);
-    // Debug print
-    // Debug print
-	//_MESSAGE("EnableLoadingScreenGeneration: %d", enableGen);
-	//_MESSAGE("EnableOverrideDefaultBackgroundImage: %d", overrideBG);
-
-	std::ostringstream whitelistSS;
-	whitelistSS << "Whitelist: ";
-	for (int n : whitelist) whitelistSS << n << " ";
-	//_MESSAGE("%s", whitelistSS.str().c_str());
-
-
-	for (int num : whitelist) {
-    	whitelistFileNames.push_back(std::to_string(num) + ".DDS");
-	}
 
 
 	dImageRD = enableGen;
-	dRandomizeModLoadScreensRD = enableRandomizeModLoadScreens;
-	//in.ignore((numeric_limits<streamsize>::max)(), ':');
-
-	//if (in.get() == '1')
-	//	dOverlayRD = true;
 
 	pathData->backgroundReplace = false;
 
@@ -182,14 +206,6 @@ void PathBuilder::verifyFiles()
 	path::verifyPathError(outputPath, "Textures\\Interface\\ALR_Backgrounds was not created");
 }
 
-void PathBuilder::rebuildIni()
-{
-	ofstream outF(pathData->iniPath);
-	outF << ";Enter path to images below, type 'default' to use default path\n" + inputPath + 
-		"\n\n;First Time Install Check Success:1\n\n;Disable image reload and delete (better performance):" + to_string(dImageRD) + 
-		"\n\n;Override default background image (replaces occasional black loadscreens, can cause mod incompatibilities):" + to_string(pathData->backgroundReplace);
-	outF.close();
-}
 
 void PathBuilder::findImgDir()
 {
@@ -274,7 +290,6 @@ void PathBuilder::correctFiles() {
 	mt19937 g(rd());
 
 	shuffle(inputFiles.begin(), inputFiles.end(), g);
-	inputFiles.resize(MAX_INPUTS);
 
 /*	else if (inputFiles.size() < MAX_INPUTS) {
 

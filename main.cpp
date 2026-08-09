@@ -14,15 +14,39 @@ __declspec(dllexport) PathBuilderParent* PathBuilderCreate(PathDataParent& _path
 {
     return new PathBuilder(_pathData);
 }
-__declspec(dllexport) ImageConvertParent* ImageConvertCreate(PathDataParent& _pathData, const std::vector<std::string>& whitelistFileNames)
+__declspec(dllexport) ImageConvertParent* ImageConvertCreate(PathDataParent& _pathData, const std::vector<WhitelistEntry>& whitelist)
 {
-    return new ImageConvert(_pathData, whitelistFileNames);
+    return new ImageConvert(_pathData, whitelist);
 }
 
 // Keep this global pointer allocation
 PathDataParent* pathData = PathDataCreate();
 PathBuilderParent* PBinst;
 PathBuilder* realPBinst;
+
+std::optional<int> GetNifIndex(RE::TESObjectSTAT* stat)
+{
+    const char* modelPath = stat->GetModel();
+    if (!modelPath || *modelPath == '\0') {
+        return std::nullopt;
+    }
+
+    std::string stem = std::filesystem::path(modelPath).stem().string();
+    if (stem.rfind("LS", 0) != 0) {
+        return std::nullopt;
+    }
+    std::string numPart = stem.substr(2);
+
+    int index = -1;
+    auto [ptr, ec] = std::from_chars(numPart.data(), numPart.data() + numPart.size(), index);
+    if (ec != std::errc{} || ptr != numPart.data() + numPart.size()) {
+        return std::nullopt;
+    }
+    return index;
+}
+
+
+
 void OnF4SEMessage(F4SE::MessagingInterface::Message* a_msg)
 {
     if (a_msg->type == F4SE::MessagingInterface::kPostPostLoad) {
@@ -36,7 +60,7 @@ void OnF4SEMessage(F4SE::MessagingInterface::Message* a_msg)
             PBinst = PathBuilderCreate(*pathData);
             realPBinst = static_cast<PathBuilder*>(PBinst);
             if (PBinst->IsImageRD()) {
-                ImageConvertParent* IMinst = ImageConvertCreate(*pathData, realPBinst->whitelistFileNames);
+                ImageConvertParent* IMinst = ImageConvertCreate(*pathData, realPBinst->whitelist);
                 delete IMinst;
             }
             
@@ -47,122 +71,85 @@ void OnF4SEMessage(F4SE::MessagingInterface::Message* a_msg)
         
     }
 
-    if (a_msg->type == F4SE::MessagingInterface::kGameDataReady){
-        //Randomize Vanilla Load Screens (respect whitelist)
+    if (a_msg->type == F4SE::MessagingInterface::kGameDataReady) {
         auto* dataHandler = RE::TESDataHandler::GetSingleton();
-        static constexpr std::array kVanillaPlugins{
-            "Fallout4.esm"sv,
-            "DLCCoast.esm"sv,
-            "DLCNukaWorld.esm"sv,
-            "DLCRobot.esm"sv,
-            "DLCworkshop03.esm"sv,
-            "ccBGSFO4044-HellfirePowerArmor.esl"sv,
-            "ccBGSFO4115-X02.esl"sv,
-            "ccSBJFO4003-Grenade.esl"sv,
-            };
-        std::unordered_map<int, RE::TESBoundObject*> vanillaLoadNifs;
-        RE::BGSTransform* sharedTransform = nullptr;
-        std::vector<RE::TESLoadScreen*>  modLoadScreens;
-        std::unordered_map<int, RE::TESLoadScreen*> vanillaLoadScreens;
-        std::vector<const RE::TESFile*> excludedFiles;
-        excludedFiles.reserve(kVanillaPlugins.size());
+        auto* alrPlugin = dataHandler->LookupLoadedLightModByName("ALR.esp"sv);
+        RE::BGSTransform* sharedTransform = dataHandler->LookupForm<RE::BGSTransform>(0x1B5, "ALR.esp"sv);
 
-        for (auto name : kVanillaPlugins) {
-             const RE::TESFile* file = dataHandler->LookupLoadedModByName(name);
-            if (!file) {
-                file = dataHandler->LookupLoadedLightModByName(name);
-            }
-            if (file) {
-                excludedFiles.push_back(file);
-            }
-            // else: not in this load order (e.g. a CC content pack not owned/installed) — skip it
-        }
-        for (auto* lscr : dataHandler->GetFormArray<RE::TESLoadScreen>()) {
-            if (!lscr->loadNIFData || !lscr->loadNIFData->loadNif) {
-                continue;  // nothing to read from or write to on this one
-            }
+        std::size_t outputPathFiles = realPBinst ? static_cast<std::size_t>(realPBinst->countOutputPathFiles()) : 0;
 
-            const auto formID = lscr->GetFormID();
-            const bool isExcluded = std::ranges::any_of(excludedFiles,
-                [formID](const RE::TESFile* f) { return f->IsFormInMod(formID); });
+        std::vector<RE::TESObjectSTAT*> alrStats;
+        std::unordered_map<int, RE::TESObjectSTAT*> statMap;
+        bool isWhitelisted;
+        if (alrPlugin) {
+            for (auto* stat : dataHandler->GetFormArray<RE::TESObjectSTAT>()) {
+                isWhitelisted = false;
+                if (!alrPlugin->IsFormInMod(stat->GetFormID())) {
+                    continue;
+                }
 
-            if (isExcluded) {
-                const char* editorID = lscr->GetFormEditorID();
-                std::string cleanID;
-                if (editorID) {
-                    cleanID = editorID;
-                    // Check if the string starts with "LS"
-                    if (cleanID.rfind("LS", 0) == 0) { // Or cleanID.starts_with("LS") in C++20
-                        cleanID = cleanID.substr(2);   // Extract everything starting at index 2
+                auto index = GetNifIndex(stat);
+                if (!index) {
+                    spdlog::warn("STAT {:08X}: model path doesn't match LS<n>; skipping", stat->GetFormID());
+                    continue;
+                }
+
+                if (*index < 0 || static_cast<std::size_t>(*index) >= outputPathFiles) {
+                    spdlog::warn("STAT {:08X}: LS{} has no corresponding generated image ({} images exist); skipping",
+                        stat->GetFormID(), *index, outputPathFiles);
+                    continue;
+                }
+
+                for (const auto& entry : realPBinst->whitelist) {
+                    if (entry.value == *index) {
+                        spdlog::info("STAT {:08X}: {} is whitelisted; excluding from donor pool", stat->GetFormID(), *index);
+                        isWhitelisted = true;
+                        continue;
                     }
                 }
-                int lsID = std::stoi(cleanID);
-                vanillaLoadNifs[lsID] = lscr->loadNIFData->loadNif;
-                vanillaLoadScreens[lsID] = lscr;
-                if (!sharedTransform) {
-                    sharedTransform = lscr->loadNIFData->transform;
-                }
-            } else {
-                modLoadScreens.push_back(lscr);
+                if (isWhitelisted)
+                    continue;
+                
+                statMap[*index] = stat;
+                alrStats.push_back(stat);
             }
         }
 
-        // Build donor pool: only vanilla LSCRs whose LS<n> is within the generated-image range
-        std::vector<int> donorKeys;
-        donorKeys.reserve(vanillaLoadNifs.size());
-        int outputPathFiles = realPBinst->countOutputPathFiles();
-        for (const auto& [key, nif] : vanillaLoadNifs) {
-            if (key >= 0 && static_cast<std::size_t>(key) < outputPathFiles) {
-                donorKeys.push_back(key);
-            }
-        }
-        std::mt19937 rng{ std::random_device{}() };
-        std::uniform_int_distribution<std::size_t> keyDist(0, donorKeys.size() - 1);
-        if (donorKeys.empty()) {
-            spdlog::warn("No vanilla load screens found within the generated-image range; skipping randomization");
+        if (statMap.empty()) {
+            spdlog::warn("No usable ALR.esp STATs found; skipping randomization");
         } else {
-            
+            std::mt19937 rng{ std::random_device{}() };
+            std::uniform_int_distribution<std::size_t> statDist(0, statMap.size() - 1);
 
-            for (const auto& [key, lscr] : vanillaLoadScreens) {
-                std::string cleanID = std::to_string(key) + ".DDS";
-                if (std::find(realPBinst->whitelistFileNames.begin(), realPBinst->whitelistFileNames.end(), cleanID) != realPBinst->whitelistFileNames.end()) {
-                    continue;
+            std::size_t statIdx = 0;
+            auto& loadScreens = dataHandler->GetFormArray<RE::TESLoadScreen>();
+            std::shuffle(loadScreens.begin(), loadScreens.end(), rng);
+            for (auto* lscr : loadScreens) {
+                isWhitelisted = false;
+                for (const auto& entry : realPBinst->whitelist) {
+                    if (lscr == dataHandler->LookupForm<RE::TESLoadScreen>(entry.formID, entry.plugin)){
+                        isWhitelisted = true;
+                        spdlog::info("This loadscreen is whitelisted! {} : using {} dds", entry.formID, entry.value);
+                        lscr->loadNIFData->loadNif                = statMap[entry.value];
+                        continue;
+                    }
                 }
-
-                auto* data = lscr->loadNIFData;
-                int donorKey = donorKeys[keyDist(rng)];
-                std::string strFileName = std::to_string(donorKey) + ".DDS";
-                if (std::find(realPBinst->whitelistFileNames.begin(), realPBinst->whitelistFileNames.end(), strFileName) != realPBinst->whitelistFileNames.end()) {
-                    continue;
+                if (!isWhitelisted){
+                    RE::TESObjectSTAT* donor = (statIdx < statMap.size()) ? alrStats[statIdx++] : alrStats[statDist(rng)];
+                    lscr->loadNIFData->loadNif               = donor;
                 }
-
-                auto* donor = vanillaLoadNifs[donorKey];  // guaranteed present: donorKey came from donorKeys, built from this same map
-
-                spdlog::info("vanilla LSCR {:08X}: loadNif {:08X} -> {:08X}",
-                    lscr->GetFormID(), data->loadNif->GetFormID(), donor->GetFormID());
-                data->loadNif = donor;
+                
+                lscr->loadNIFData->transform              = sharedTransform;
+                lscr->loadNIFData->rotationConstraints[0] = 0;
+                lscr->loadNIFData->rotationConstraints[1] = 0;
+                lscr->loadNIFData->zoomConstraints[0]     = 0.0f;
+                lscr->loadNIFData->zoomConstraints[1]     = 0.0f;
             }
-        }
-        if (PBinst->RandomizeModLoadScreens()){            
-            for (auto* lscr : modLoadScreens) {
-                auto* data = lscr->loadNIFData;
-                int donorKey = donorKeys[keyDist(rng)];  
-                auto* donor = vanillaLoadNifs[donorKey];
 
-                spdlog::info("mod LSCR {:08X}: loadNif {:08X} -> {:08X}",
-                    lscr->GetFormID(), data->loadNif->GetFormID(), donor->GetFormID());
-
-                data->loadNif               = donor;
-                data->transform              = sharedTransform;
-                data->rotationConstraints[0] = 0;
-                data->rotationConstraints[1] = 0;
-                data->zoomConstraints[0]     = 0.0f;
-                data->zoomConstraints[1]     = 0.0f;
-            }
-            spdlog::info("Randomized {} mod load screens ({} vanilla donors)",
-             modLoadScreens.size(), vanillaLoadNifs.size());
+            spdlog::info("Randomized load screens using {} of {} ALR.esp STATs (bounded by {} generated images)",
+                statMap.size(), 455, outputPathFiles);
         }
-    delete PBinst;
+        delete PBinst;
     }
 }
 

@@ -3,6 +3,12 @@
 #include "cmd.cpp"
 #include "PathData.h"
 
+struct WhitelistEntry
+{
+    int formID;
+    std::string plugin;
+    int value;
+};
 class PathBuilderParent {
 public:
 	virtual ~PathBuilderParent() {}
@@ -39,7 +45,7 @@ private:
 		rebuildIniFlag;
 
 public:
-	std::vector<std::string> whitelistFileNames;
+	std::vector<WhitelistEntry> whitelist;
 	PathBuilder(PathDataParent& _pathData);
 	~PathBuilder();
 	bool IsImageRD() const override { return dImageRD; }

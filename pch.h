@@ -6,8 +6,6 @@
 //#define PLUGIN_NAME "ALR"
 
 #define PLUGIN_PATH_LEN 20
-#define MAX_INPUTS 455
-
 #define NOMINMAX
 
 #include <spdlog/spdlog.h>

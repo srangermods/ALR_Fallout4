@@ -1,6 +1,7 @@
 #pragma once
 #include "pch.h"
 #include "PathData.h"
+#include "PathBuilder.h"
 #include "cmd.cpp"
 
 class ImageConvertParent {
@@ -148,7 +149,6 @@ class ImageConvert : public ImageConvertParent {
 private:
 
 	PathDataParent* pathData = NULL;
-	std::vector<std::string> whitelistFileNames;
 	void convert(wstring _inputFilePath, wstring _outputFilePath,ScratchImage& reusable2kCanvas, 
     ScratchImage& reusable4kCanvas),
 		convertBackgroundReplace(wstring _inputFilePath, wstring _outputFilePath),
@@ -163,6 +163,6 @@ private:
 public:
 
 	
-	ImageConvert(PathDataParent& _pathData, const std::vector<std::string>& whitelistFileNames);
+	ImageConvert(PathDataParent& _pathData, const std::vector<WhitelistEntry>& whitelist);
 	~ImageConvert();
 };

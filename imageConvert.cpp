@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "ImageConvert.h"
+#include "PathBuilder.h"
 #include <cmath>
 
 std::string WideToUtf8(const std::wstring& wstr) {
@@ -18,8 +19,8 @@ std::string WideToUtf8(const std::wstring& wstr) {
     return result;
 }
 
-ImageConvert::ImageConvert(PathDataParent& _pathData, const std::vector<std::string>& whitelistFileNames)
-    : pathData(&_pathData), whitelistFileNames(whitelistFileNames)
+ImageConvert::ImageConvert(PathDataParent& _pathData, const std::vector<WhitelistEntry>& whitelist)
+    : pathData(&_pathData)
 {
     sizeImageData = imageData(pathData->outputWidth, pathData->outputHeight);
     maxDisplayImageData = imageData(sizeImageData.ar, sizeImageData.arMul, sizeImageData.resMul);
@@ -37,15 +38,24 @@ ImageConvert::ImageConvert(PathDataParent& _pathData, const std::vector<std::str
         threadCanvas2k.Initialize2D(DXGI_FORMAT_R8G8B8A8_UNORM, 2048, 2048, 1, 0, CP_FLAGS_NONE);
         threadCanvas4k.Initialize2D(DXGI_FORMAT_R8G8B8A8_UNORM, 4096, 4096, 1, 0, CP_FLAGS_NONE);
 
+        bool isWhitelisted;
         // Safely distribute the iterations across the initialized threads
         #pragma omp for
         for (int i = 0; i < pathData->inputFilePaths.size(); i++) {
+            isWhitelisted = false;
             std::wstring outputFilePathW = path::to_wstring(pathData->outputPaths.at(i));
-            std::string filename = std::filesystem::path(outputFilePathW).filename().string();
+            int filenameNumber = std::stoi(
+                std::filesystem::path(outputFilePathW).stem().string()
+            );
 
-            if (std::find(whitelistFileNames.begin(), whitelistFileNames.end(), filename) != whitelistFileNames.end()) {
-                continue;
+            for (const auto& entry : whitelist) {
+                if (entry.value == filenameNumber) {
+                    isWhitelisted = true;
+                    continue;
+                }
             }
+            if (isWhitelisted)
+                continue;
 
             // Pass the thread-safe local canvases
             convert(path::to_wstring(pathData->inputFilePaths.at(i)), outputFilePathW, threadCanvas2k, threadCanvas4k);
