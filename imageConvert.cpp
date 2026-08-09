@@ -39,6 +39,8 @@ ImageConvert::ImageConvert(PathDataParent& _pathData, const std::vector<Whitelis
         threadCanvas4k.Initialize2D(DXGI_FORMAT_R8G8B8A8_UNORM, 4096, 4096, 1, 0, CP_FLAGS_NONE);
 
         bool isWhitelisted;
+        std::error_code ec;
+        bool fileExists;
         // Safely distribute the iterations across the initialized threads
         #pragma omp for
         for (int i = 0; i < pathData->inputFilePaths.size(); i++) {
@@ -50,8 +52,19 @@ ImageConvert::ImageConvert(PathDataParent& _pathData, const std::vector<Whitelis
 
             for (const auto& entry : whitelist) {
                 if (entry.value == filenameNumber) {
-                    isWhitelisted = true;
-                    continue;
+
+                    fileExists = std::filesystem::exists(outputFilePathW, ec);
+                    if (ec) {
+                        spdlog::warn("exists() check failed for {}: {}",
+                            std::filesystem::path(outputFilePathW).string(), ec.message());
+                        
+                        spdlog::info("{} is whitelisted, but the file does not yet exist. Will still generate", filenameNumber);
+                    }
+                    else{
+                        isWhitelisted = true;
+                        spdlog::info("{} is whitelisted, and file exists. will not generate.", filenameNumber);
+                    }
+                    continue;                   
                 }
             }
             if (isWhitelisted)

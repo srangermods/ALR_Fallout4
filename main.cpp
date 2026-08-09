@@ -78,7 +78,9 @@ void OnF4SEMessage(F4SE::MessagingInterface::Message* a_msg)
 
         std::size_t outputPathFiles = realPBinst ? static_cast<std::size_t>(realPBinst->countOutputPathFiles()) : 0;
 
+        //vector of donor stats, not including whitelisted ones
         std::vector<RE::TESObjectSTAT*> alrStats;
+        //contains all stats in ALR, mapped to it's dds filename as a key
         std::unordered_map<int, RE::TESObjectSTAT*> statMap;
         bool isWhitelisted;
         if (alrPlugin) {
@@ -99,7 +101,7 @@ void OnF4SEMessage(F4SE::MessagingInterface::Message* a_msg)
                         stat->GetFormID(), *index, outputPathFiles);
                     continue;
                 }
-
+                statMap[*index] = stat;
                 for (const auto& entry : realPBinst->whitelist) {
                     if (entry.value == *index) {
                         spdlog::info("STAT {:08X}: {} is whitelisted; excluding from donor pool", stat->GetFormID(), *index);
@@ -110,7 +112,6 @@ void OnF4SEMessage(F4SE::MessagingInterface::Message* a_msg)
                 if (isWhitelisted)
                     continue;
                 
-                statMap[*index] = stat;
                 alrStats.push_back(stat);
             }
         }
@@ -119,7 +120,7 @@ void OnF4SEMessage(F4SE::MessagingInterface::Message* a_msg)
             spdlog::warn("No usable ALR.esp STATs found; skipping randomization");
         } else {
             std::mt19937 rng{ std::random_device{}() };
-            std::uniform_int_distribution<std::size_t> statDist(0, statMap.size() - 1);
+            std::uniform_int_distribution<std::size_t> statDist(0, alrStats.size() - 1);
 
             std::size_t statIdx = 0;
             auto& loadScreens = dataHandler->GetFormArray<RE::TESLoadScreen>();
@@ -135,7 +136,7 @@ void OnF4SEMessage(F4SE::MessagingInterface::Message* a_msg)
                     }
                 }
                 if (!isWhitelisted){
-                    RE::TESObjectSTAT* donor = (statIdx < statMap.size()) ? alrStats[statIdx++] : alrStats[statDist(rng)];
+                    RE::TESObjectSTAT* donor = (statIdx < alrStats.size()) ? alrStats[statIdx++] : alrStats[statDist(rng)];
                     lscr->loadNIFData->loadNif               = donor;
                 }
                 
@@ -147,7 +148,7 @@ void OnF4SEMessage(F4SE::MessagingInterface::Message* a_msg)
             }
 
             spdlog::info("Randomized load screens using {} of {} ALR.esp STATs (bounded by {} generated images)",
-                statMap.size(), MAX_INPUTS, outputPathFiles);
+                alrStats.size(), MAX_INPUTS, outputPathFiles);
         }
         delete PBinst;
     }
