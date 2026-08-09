@@ -291,15 +291,10 @@ void PathBuilder::correctFiles() {
 
 	shuffle(inputFiles.begin(), inputFiles.end(), g);
 
-/*	else if (inputFiles.size() < MAX_INPUTS) {
+	if (inputFiles.size() > MAX_INPUTS) {
 
-		vector<string> tCopy = inputFiles;
-		for (int i = 0; inputFiles.size() < MAX_INPUTS; i++) {
-			shuffle(tCopy.begin(), tCopy.end(), g);
-			inputFiles.insert(inputFiles.end(), tCopy.begin(), tCopy.end());
-		}
 		inputFiles.resize(MAX_INPUTS);
-	}*/
+	}
 }
 
 void PathBuilder::generateInputPaths() {

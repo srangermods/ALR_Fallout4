@@ -17,11 +17,17 @@ Works for OG, NG, AE (thanks to commonlibf4 from Dear-Modding-FO4)
 
 -Fixed bugs, made image generation more random
 
--ESL flagged ALR - ALL DLC.esp plugin
+-ESL flagged ALR.esp
 
--Added loading screen replacers for all loading screens + the free CCs given in the NG update (this is a new ESL-flagged plugin, CC_ALR.esp)
+-No longer requires DLC or freebie CCS
 
--removed LoadingMenu.swf from the mod so the overlay text will show by default.
+-Dynamically Replaces all Loading Screens (including mod ones)
+
+-Whitelist functionality
+
+-Supports up to 456 unique images to replace loading screens with
+
+-removed LoadingMenu.swf from the mod so the overlay text will show by default (option to hide it in FOMOD)
 
 
 
@@ -33,13 +39,19 @@ Works for OG, NG, AE (thanks to commonlibf4 from Dear-Modding-FO4)
 
 -use `EnableLoadingScreenGeneration = false` to turn on or off random loading screen image generation from ALR_Image_DIR
 
--keep this setting default `EnableOverrideDefaultBackgroundImage = false`
 
--Default path to images now is F4SE/Plugins/ALR_Image_Dir in your data directory
+-`ImageSourcePath` for optional custom image soure path. Default path to images now is F4SE/Plugins/ALR_Image_Dir in your data directory
 
--added WhitelistImageFilesFromRegeneration in ALR.ini, lets you whitelist what loading screen images to regenerate.  Each Loading screen is mapped to a number, so you can whitelist an image number so that specific image mapping always corresponds to the loading screen. For example, if you like having an institute-related image always mapped to an institute related loading screen, you can add the number to the whitelist. The whitelist is delimited by commas. Here's how to use it:
+-Whitelist Feature 
 
--WhitelistImageFilesFromRegeneration = 0,1,3,11,12,13,23,29,31,35,36,37,40
+[Whitelist]
+;To use the Whitelist, do formID:PluginName.esp = #
+;formID is the loadscreen record you want to replace, do not use load order prefix 
+;# is the dds file you want the load screen to use, in Textures\Interface\ALR_Backgrounds in your overwrite directory
+;vanilla pipboy loading screen will use  Textures\Interface\ALR_Backgrounds\1.dds
+;0x21E50:Fallout4.esm = 1
+;0x1234:SomeMod.esp = 0
+;0xABCD:AnotherMod.esl = 2
 
 ### Install
 
@@ -47,6 +59,6 @@ Works for OG, NG, AE (thanks to commonlibf4 from Dear-Modding-FO4)
 
 -Configure your ALR.ini setting correctly in F4SE/Plugins
 
--add images to F4SE/Plugins/ALR_Image_Dir (preferabbly .dds files and in 16:9 aspect ratio)
+-add images to F4SE/Plugins/ALR_Image_Dir 
 
 -Image generation will now run  when you launch the game, depending on your ALR.ini configuration

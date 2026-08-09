@@ -147,7 +147,7 @@ void OnF4SEMessage(F4SE::MessagingInterface::Message* a_msg)
             }
 
             spdlog::info("Randomized load screens using {} of {} ALR.esp STATs (bounded by {} generated images)",
-                statMap.size(), 455, outputPathFiles);
+                statMap.size(), MAX_INPUTS, outputPathFiles);
         }
         delete PBinst;
     }
