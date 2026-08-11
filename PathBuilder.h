@@ -26,6 +26,7 @@ private:
 
 	void readInis(),
 		findInputFiles(),
+		cleanOutputPathFiles(),
 		generateInputPaths(),
 		correctFiles(),
 		generateOutputPaths(),

@@ -24,6 +24,7 @@ PathBuilder::PathBuilder(PathDataParent& _pathData) : pathData(&_pathData)
 
 	if (dImageRD && !dOverlayRD) {
 		//_MESSAGE("Setting up input files and paths.");
+		cleanOutputPathFiles();
 		buildTextureDir();
 		verifyFiles();
 		findInputFiles();
@@ -206,6 +207,47 @@ void PathBuilder::verifyFiles()
 	path::verifyPathError(outputPath, "Textures\\Interface\\ALR_Backgrounds was not created");
 }
 
+void PathBuilder::cleanOutputPathFiles()
+{
+    std::error_code ec;
+    auto iterator = std::filesystem::directory_iterator(outputPath, ec);
+    if (ec) {
+        spdlog::warn("cleanOutputPathFiles: couldn't open {}: {}", outputPath, ec.message());
+        return;
+    }
+
+    for (const auto& entry : iterator) {
+        if (!entry.is_regular_file(ec) || ec) {
+            continue;
+        }
+        if (entry.path().extension() != ".DDS") {
+            continue;
+        }
+
+        std::string stem = entry.path().stem().string();
+        int fileNumber = -1;
+        auto [ptr, parseEc] = std::from_chars(stem.data(), stem.data() + stem.size(), fileNumber);
+        if (parseEc != std::errc{} || ptr != stem.data() + stem.size()) {
+            // Doesn't match "<number>.DDS" — not one of ours, leave it alone
+            continue;
+        }
+
+        bool isWhitelisted = std::any_of(whitelist.begin(), whitelist.end(),
+            [fileNumber](const auto& e) { return e.value == fileNumber; });
+
+        if (isWhitelisted) {
+            spdlog::info("cleanOutputPathFiles: keeping {} (whitelisted)", entry.path().string());
+            continue;
+        }
+
+        std::filesystem::remove(entry.path(), ec);
+        if (ec) {
+            spdlog::warn("cleanOutputPathFiles: failed to delete {}: {}", entry.path().string(), ec.message());
+        } else {
+            spdlog::info("cleanOutputPathFiles: deleted {}", entry.path().string());
+        }
+    }
+}
 
 void PathBuilder::findImgDir()
 {

@@ -57,12 +57,13 @@ ImageConvert::ImageConvert(PathDataParent& _pathData, const std::vector<Whitelis
                     if (ec) {
                         spdlog::warn("exists() check failed for {}: {}",
                             std::filesystem::path(outputFilePathW).string(), ec.message());
-                        
-                        spdlog::info("{} is whitelisted, but the file does not yet exist. Will still generate", filenameNumber);
-                    }
-                    else{
+                    } else if (!fileExists) {
+                        spdlog::info("{} is whitelisted, but the {} does not yet exist. Will still generate",
+                            filenameNumber, std::filesystem::path(outputFilePathW).string());
+                    } else {
                         isWhitelisted = true;
-                        spdlog::info("{} is whitelisted, and file exists. will not generate.", filenameNumber);
+                        spdlog::info("{} is whitelisted, and {} exists. will not generate.",
+                            filenameNumber, std::filesystem::path(outputFilePathW).string());
                     }
                     continue;                   
                 }
