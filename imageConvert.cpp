@@ -38,38 +38,15 @@ ImageConvert::ImageConvert(PathDataParent& _pathData, const std::vector<Whitelis
         threadCanvas2k.Initialize2D(DXGI_FORMAT_R8G8B8A8_UNORM, 2048, 2048, 1, 0, CP_FLAGS_NONE);
         threadCanvas4k.Initialize2D(DXGI_FORMAT_R8G8B8A8_UNORM, 4096, 4096, 1, 0, CP_FLAGS_NONE);
 
-        bool isWhitelisted;
         std::error_code ec;
         bool fileExists;
         // Safely distribute the iterations across the initialized threads
         #pragma omp for
         for (int i = 0; i < pathData->inputFilePaths.size(); i++) {
-            isWhitelisted = false;
             std::wstring outputFilePathW = path::to_wstring(pathData->outputPaths.at(i));
             int filenameNumber = std::stoi(
                 std::filesystem::path(outputFilePathW).stem().string()
             );
-
-            for (const auto& entry : whitelist) {
-                if (entry.value == filenameNumber) {
-
-                    fileExists = std::filesystem::exists(outputFilePathW, ec);
-                    if (ec) {
-                        spdlog::warn("exists() check failed for {}: {}",
-                            std::filesystem::path(outputFilePathW).string(), ec.message());
-                    } else if (!fileExists) {
-                        spdlog::info("{} is whitelisted, but the {} does not yet exist. Will still generate",
-                            filenameNumber, std::filesystem::path(outputFilePathW).string());
-                    } else {
-                        isWhitelisted = true;
-                        spdlog::info("{} is whitelisted, and {} exists. will not generate.",
-                            filenameNumber, std::filesystem::path(outputFilePathW).string());
-                    }
-                    continue;                   
-                }
-            }
-            if (isWhitelisted)
-                continue;
 
             // Pass the thread-safe local canvases
             convert(path::to_wstring(pathData->inputFilePaths.at(i)), outputFilePathW, threadCanvas2k, threadCanvas4k);

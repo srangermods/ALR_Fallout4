@@ -7,6 +7,7 @@ struct WhitelistEntry
 {
     int formID;
     std::string plugin;
+    std::string filename;
     int value;
 };
 class PathBuilderParent {

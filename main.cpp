@@ -72,6 +72,7 @@ void OnF4SEMessage(F4SE::MessagingInterface::Message* a_msg)
     }
 
     if (a_msg->type == F4SE::MessagingInterface::kGameDataReady) {
+        spdlog::info("Starting Loading Screen replacement...");
         auto* dataHandler = RE::TESDataHandler::GetSingleton();
         auto* alrPlugin = dataHandler->LookupLoadedLightModByName("ALR.esp"sv);
         RE::BGSTransform* sharedTransform = dataHandler->LookupForm<RE::BGSTransform>(0x1B5, "ALR.esp"sv);
@@ -125,12 +126,20 @@ void OnF4SEMessage(F4SE::MessagingInterface::Message* a_msg)
             std::size_t statIdx = 0;
             auto& loadScreens = dataHandler->GetFormArray<RE::TESLoadScreen>();
             std::shuffle(loadScreens.begin(), loadScreens.end(), rng);
+            RE::TESLoadScreen::LoadNIFData* tmpLoadNIFData = nullptr;
             for (auto* lscr : loadScreens) {
+                if (!(tmpLoadNIFData) && lscr->loadNIFData){
+                    tmpLoadNIFData = lscr -> loadNIFData;
+                }
+                if (!(lscr->loadNIFData)) {
+                    //handle load screens with no 3d models, by giving a placeholder one to swap
+                    lscr->loadNIFData = tmpLoadNIFData;
+                }
                 isWhitelisted = false;
                 for (const auto& entry : realPBinst->whitelist) {
                     if (lscr == dataHandler->LookupForm<RE::TESLoadScreen>(entry.formID, entry.plugin)){
                         isWhitelisted = true;
-                        spdlog::info("This loadscreen is whitelisted! {} : using {} dds", entry.formID, entry.value);
+                        spdlog::info("This loadscreen is whitelisted! {} : using {}", entry.formID, entry.filename);
                         lscr->loadNIFData->loadNif                = statMap[entry.value];
                         continue;
                     }

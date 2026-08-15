@@ -52,7 +52,6 @@ std::unordered_map<std::string, std::string> parseIni(
 {
     std::ifstream file(filename);
     std::unordered_map<std::string, std::string> settings;
-
     std::string line;
     std::string currentSection;
 
@@ -61,78 +60,94 @@ std::unordered_map<std::string, std::string> parseIni(
         size_t commentPos = line.find_first_of(";#");
         if (commentPos != std::string::npos)
             line = line.substr(0, commentPos);
-
         // Trim whitespace
         line.erase(0, line.find_first_not_of(" \t"));
         line.erase(line.find_last_not_of(" \t") + 1);
-
         // Skip empty lines
         if (line.empty())
             continue;
-
         // Check for section header
         if (line.front() == '[' && line.back() == ']') {
             currentSection = line.substr(1, line.size() - 2);
-
-            // Trim section name
             currentSection.erase(0, currentSection.find_first_not_of(" \t"));
             currentSection.erase(currentSection.find_last_not_of(" \t") + 1);
-
             continue;
         }
-
         size_t equals = line.find('=');
         if (equals == std::string::npos)
             continue;
-
         std::string key = line.substr(0, equals);
         std::string value = line.substr(equals + 1);
-
-        // Trim whitespace
         key.erase(0, key.find_first_not_of(" \t"));
         key.erase(key.find_last_not_of(" \t") + 1);
-
         value.erase(0, value.find_first_not_of(" \t"));
         value.erase(value.find_last_not_of(" \t") + 1);
-
         if (key.empty() || value.empty())
             continue;
 
-        // Handle [Whitelist]
-        if (currentSection == "Whitelist") {
-            size_t colon = key.find(':');
+        // Handle [Whitelist]: key = "value:formID:plugin", RHS = inputFilename
+		if (currentSection == "Whitelist") {
+		    size_t firstColon = key.find(':');
+		    if (firstColon == std::string::npos) {
+		        spdlog::warn("Whitelist entry \"{}\": missing ':' separators; skipping", key);
+		        continue;
+		    }
+		    size_t secondColon = key.find(':', firstColon + 1);
+		    if (secondColon == std::string::npos) {
+		        spdlog::warn("Whitelist entry \"{}\": expected value:formID:plugin; skipping", key);
+		        continue;
+		    }
 
-            if (colon == std::string::npos)
-                continue;
+		    std::string valueStr = key.substr(0, firstColon);
+		    std::string formIDStr = key.substr(firstColon + 1, secondColon - firstColon - 1);
+		    std::string plugin = key.substr(secondColon + 1);
+		    plugin.erase(0, plugin.find_first_not_of(" \t"));
+		    plugin.erase(plugin.find_last_not_of(" \t") + 1);
 
-            int formID = std::stoi(key.substr(0, colon), nullptr, 0);
-            std::string plugin = key.substr(colon + 1);
+		    int whitelistValue = -1;
+		    int formID = -1;
+		    try {
+		        whitelistValue = std::stoi(valueStr, nullptr, 10);
+		        formID = std::stoi(formIDStr, nullptr, 0);
+		    } catch (...) {
+		        spdlog::warn("Whitelist entry \"{}\": couldn't parse value/formID; skipping", key);
+		        continue;
+		    }
 
-            // Trim plugin whitespace
-            plugin.erase(0, plugin.find_first_not_of(" \t"));
-            plugin.erase(plugin.find_last_not_of(" \t") + 1);
+		    // Reject this entry if it collides with one already accepted
+		    bool rejected = false;
+		    for (const auto& existing : whitelist) {
+		        if (existing.value == whitelistValue) {
+		            spdlog::warn("Whitelist entry \"{}\": value {} already claimed by {:08X}:{}; rejecting duplicate",
+		                key, whitelistValue, existing.formID, existing.plugin);
+		            rejected = true;
+		            break;
+		        }
+		        if (existing.formID == formID && existing.plugin == plugin) {
+		            spdlog::warn("Whitelist entry \"{}\": {:08X}:{} already whitelisted (as value {}); rejecting duplicate",
+		                key, formID, plugin, existing.value);
+		            rejected = true;
+		            break;
+		        }
+		        if (existing.filename == value) {
+		            spdlog::warn("Whitelist entry \"{}\": filename \"{}\" already used by value {}; rejecting duplicate",
+		                key, value, existing.value);
+		            rejected = true;
+		            break;
+		        }
+		    }
+		    if (rejected) {
+		        continue;
+		    }
 
-            try {
-                int whitelistValue = std::stoi(value);
-
-                whitelist.push_back({
-                    formID,
-                    plugin,
-                    whitelistValue
-                });
-            }
-            catch (...) {
-                // Invalid whitelist entry; skip it
-            }
-
-            continue;
-        }
+		    whitelist.push_back({ formID, plugin, value, whitelistValue });
+		    continue;
+		}
 
         // Normal ALR.ini setting
         if (!key.empty())
             settings[key] = value;
     }
-
     return settings;
 }
 
@@ -232,14 +247,6 @@ void PathBuilder::cleanOutputPathFiles()
             continue;
         }
 
-        bool isWhitelisted = std::any_of(whitelist.begin(), whitelist.end(),
-            [fileNumber](const auto& e) { return e.value == fileNumber; });
-
-        if (isWhitelisted) {
-            spdlog::info("cleanOutputPathFiles: keeping {} (whitelisted)", entry.path().string());
-            continue;
-        }
-
         std::filesystem::remove(entry.path(), ec);
         if (ec) {
             spdlog::warn("cleanOutputPathFiles: failed to delete {}: {}", entry.path().string(), ec.message());
@@ -317,32 +324,119 @@ void PathBuilder::findPrefPath()
 
 
 void PathBuilder::findInputFiles() {
-	for (auto& path : std::filesystem::recursive_directory_iterator(inputPath)) {
-		string ext = path::toLower(path.path().extension().string());
-		if (ext == ".jpg" || ext == ".png" || ext == ".dds")
-			inputFiles.emplace_back(path.path().string());
-	}
+    static const std::unordered_set<std::string> kSupportedExtensions = {
+        ".jpg", ".jpeg", ".jfif",".png", ".dds", ".bmp", ".tif", ".tiff"
+    };
 
-	if(inputFiles.size() == 0) message::displayErrorMessage("ALR_ERROR", "No Images Found In ALR.ini's Path, Ensure DDS/PNG/JPG Images Are In F4SE\\Plugins\\ALR_Image_Dir Or The Path Set Manually In Ini ");
+    std::vector<std::string> allFiles;
+    for (auto& path : std::filesystem::recursive_directory_iterator(inputPath)) {
+        std::string ext = path::toLower(path.path().extension().string());
+        if (kSupportedExtensions.count(ext)) {
+            allFiles.emplace_back(path.path().string());
+        }
+    }
+
+    if (allFiles.empty()) {
+        message::displayErrorMessage("ALR_ERROR",
+            "No Images Found In ALR.ini's Path, Ensure DDS/PNG/JPG/BMP/TIFF/GIF Images Are In F4SE\\Plugins\\ALR_Image_Dir Or The Path Set Manually In Ini ");
+        return;
+    }
+
+    // Match each whitelist entry to a real file by filename, pull it out of the general pool
+    std::unordered_map<int, std::string> pinnedSlots;  // value -> full path
+    std::vector<bool> matched(allFiles.size(), false);
+
+    for (const auto& entry : whitelist) {
+        bool found = false;
+        for (std::size_t i = 0; i < allFiles.size(); i++) {
+            if (matched[i]) continue;
+            std::string fname = path::toLower(std::filesystem::path(allFiles[i]).filename().string());
+            if (fname == path::toLower(entry.filename)) {
+                pinnedSlots[entry.value] = allFiles[i];
+                matched[i] = true;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            spdlog::warn("Whitelist entry for value {} references \"{}\", but no matching file was found in the input directory",
+                entry.value, entry.filename);
+        }
+    }
+
+    // Everything not claimed by the whitelist
+    std::vector<std::string> remaining;
+    for (std::size_t i = 0; i < allFiles.size(); i++) {
+        if (!matched[i]) remaining.push_back(allFiles[i]);
+    }
+
+    // Final vector must be large enough to hold the highest pinned slot
+    std::size_t maxPinnedIndex = 0;
+    for (const auto& [idx, path] : pinnedSlots) {
+        maxPinnedIndex = std::max(maxPinnedIndex, static_cast<std::size_t>(idx));
+    }
+    std::size_t finalSize = std::max(allFiles.size(), maxPinnedIndex + 1);
+    inputFiles.assign(finalSize, std::string{});
+
+    for (const auto& [idx, path] : pinnedSlots) {
+        inputFiles[idx] = path;
+    }
+
+    // Fill the remaining (non-pinned) empty slots with the unclaimed files, in order
+    std::size_t remainIdx = 0;
+    for (std::size_t i = 0; i < inputFiles.size() && remainIdx < remaining.size(); i++) {
+        if (inputFiles[i].empty()) {
+            inputFiles[i] = remaining[remainIdx++];
+        }
+    }
+
+    // Trim only genuinely-unused trailing slots (e.g. a pinned value far beyond file count)
+    while (!inputFiles.empty() && inputFiles.back().empty()) {
+        inputFiles.pop_back();
+    }
 }
 
 void PathBuilder::correctFiles() {
+    std::unordered_set<std::size_t> pinnedIndices;
+    for (const auto& entry : whitelist) {
+        if (entry.value >= 0 && static_cast<std::size_t>(entry.value) < inputFiles.size()) {
+            pinnedIndices.insert(static_cast<std::size_t>(entry.value));
+        } else if (entry.value >= 0) {
+            spdlog::warn("Whitelist value {} is beyond inputFiles bounds ({}); this pin will be lost if MAX_INPUTS truncates further",
+                entry.value, inputFiles.size());
+        }
+    }
 
-	random_device rd;
-	mt19937 g(rd());
+    // Collect only the non-pinned entries, shuffle those, write them back to their original slots
+    std::vector<std::string> movable;
+    std::vector<std::size_t> movablePositions;
+    for (std::size_t i = 0; i < inputFiles.size(); i++) {
+        if (!pinnedIndices.count(i)) {
+            movable.push_back(inputFiles[i]);
+            movablePositions.push_back(i);
+        }
+    }
 
-	shuffle(inputFiles.begin(), inputFiles.end(), g);
+    std::random_device rd;
+    std::mt19937 g(rd());
+    std::shuffle(movable.begin(), movable.end(), g);
 
-	if (inputFiles.size() > MAX_INPUTS) {
+    for (std::size_t i = 0; i < movable.size(); i++) {
+        inputFiles[movablePositions[i]] = movable[i];
+    }
 
-		inputFiles.resize(MAX_INPUTS);
-	}
+    if (inputFiles.size() > MAX_INPUTS) {
+        for (std::size_t idx : pinnedIndices) {
+            if (idx >= MAX_INPUTS) {
+                spdlog::warn("Whitelist pin at index {} is being dropped — MAX_INPUTS ({}) truncates it",
+                    idx, MAX_INPUTS);
+            }
+        }
+        inputFiles.resize(MAX_INPUTS);
+    }
 }
 
 void PathBuilder::generateInputPaths() {
-	//random_device rd;
-	//mt19937 g(rd());
-	//shuffle(inputFiles.begin(), inputFiles.end(), g);
 	
 	for (auto& inputFile : inputFiles)
 		pathData->inputFilePaths.emplace_back(inputFile);
