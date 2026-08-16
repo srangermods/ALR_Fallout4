@@ -114,6 +114,14 @@ void ImageConvert::createOverlay(wstring _outputFilePath)
     message::checkForError(SaveToDDSFile(*overlayImage.GetImage(0, 0, 0), DDS_FLAGS_NONE, _outputFilePath.c_str()));
 }
 
+static void ClearCanvas(ScratchImage& canvas)
+{
+    const Image* img = canvas.GetImage(0, 0, 0);
+    auto* pixels32 = reinterpret_cast<std::uint32_t*>(img->pixels);
+    // R8G8B8A8_UNORM, little-endian: 0xFF000000 in memory = bytes {R=0,G=0,B=0,A=255}
+    std::fill_n(pixels32, img->width * img->height, 0xFF000000u);
+}
+
 void ImageConvert::convert(wstring _inputFilePath, wstring _outputFilePath, ScratchImage& reusable2kCanvas, 
     ScratchImage& reusable4kCanvas) {
 
@@ -179,7 +187,7 @@ void ImageConvert::convert(wstring _inputFilePath, wstring _outputFilePath, Scra
 
     // 5. Select our pre-allocated canvas (Zero allocation cost!)
     ScratchImage& finalCanvas = isFourK ? reusable4kCanvas : reusable2kCanvas;
-
+    ClearCanvas(finalCanvas);
     // 6. Blit the image into the pre-allocated memory using dynamic offsets
     Rect r0(0, 0, fitWidth, fitHeight);
     message::checkForError(CopyRectangle(
