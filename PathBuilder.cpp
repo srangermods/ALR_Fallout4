@@ -177,40 +177,6 @@ void PathBuilder::readInis()
 	pathData->backgroundReplace = false;
 
 	in.close();
-
-	in.open(prefPath);
-
-	pathData->outputHeight = 0;
-	pathData->outputWidth = 0;
-
-	if (!in.is_open()) {
-		message::displayMessage("ALR_WARNING", "Fallout4Prefs.ini Not Found \n Default Settings Assumed");
-		pathData->outputHeight = 1080;
-		pathData->outputWidth = 1920;
-	}
-	else {
-		string line;
-		int resIndex = 8,
-			resIdIndex = 6;
-
-		while (getline(in, line)) {
-			if (line.find("iSize ", 0) != string::npos) {
-				ostringstream resSS;
-
-				for (int i = resIndex; i < line.size(); i++)
-					resSS << line.at(i);
-
-				if(line.at(resIdIndex) == 'H')
-					pathData->outputHeight = stoi(resSS.str());
-				else
-					pathData->outputWidth = stoi(resSS.str());
-
-				if (pathData->outputHeight != 0 && pathData->outputWidth != 0)
-					break;
-			}
-		}
-	}
-	in.close();
 }
 
 

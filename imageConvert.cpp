@@ -22,10 +22,6 @@ std::string WideToUtf8(const std::wstring& wstr) {
 ImageConvert::ImageConvert(PathDataParent& _pathData, const std::vector<WhitelistEntry>& whitelist)
     : pathData(&_pathData)
 {
-    sizeImageData = imageData(pathData->outputWidth, pathData->outputHeight);
-    maxDisplayImageData = imageData(sizeImageData.ar, sizeImageData.arMul, sizeImageData.resMul);
-
-    createOverlay(path::to_wstring(pathData->overlayPath));
 
     // Kicks off the parallel thread team
     #pragma omp parallel
@@ -110,7 +106,7 @@ ImageConvert::~ImageConvert()
 void ImageConvert::createOverlay(wstring _outputFilePath)
 {
     ScratchImage overlayImage;
-    message::checkForError(overlayImage.Initialize2D(DXGI_FORMAT_R8G8B8A8_UNORM, maxDisplayImageData.res.width, maxDisplayImageData.res.height, 1, 0, CP_FLAGS_NONE));
+    message::checkForError(overlayImage.Initialize2D(DXGI_FORMAT_R8G8B8A8_UNORM, 2048, 1024, 1, 0, CP_FLAGS_NONE));
     message::checkForError(SaveToDDSFile(*overlayImage.GetImage(0, 0, 0), DDS_FLAGS_NONE, _outputFilePath.c_str()));
 }
 
