@@ -1,13 +1,4 @@
 
-##  Build
-```
-git clone --recurse-submodules https://github.com/srangermods/ALR_Fallout4.git
-
-Build DirectXTex lib (Visual Studio 2022, /MD, x64 Release) via .Sln (Desktop_2022_Win10)
-Place DirectXTex lib in extern/lib
-
-xmake build
-```
 
 ## Changes 
 
@@ -17,6 +8,10 @@ Works for OG, NG, AE (thanks to commonlibf4 from Dear-Modding-FO4)
 
 -Fixed bugs, made image generation more random
 
+-Much more disk space efficient now.
+
+-Allows "Bring Your Own Textures", you can place your own dds textures into Textures\Interface\ALR_Backgrounds if you turn off image generation
+
 -ESL flagged ALR.esp
 
 -No longer requires DLC or freebie CCS
@@ -25,7 +20,7 @@ Works for OG, NG, AE (thanks to commonlibf4 from Dear-Modding-FO4)
 
 -Whitelist functionality
 
--Supports up to 456 unique images to replace loading screens with
+-No cap on how many images can be used.
 
 -removed LoadingMenu.swf from the mod so the overlay text will show by default (option to hide it in FOMOD)
 

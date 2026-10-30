@@ -2,11 +2,8 @@
 #define _CRT_SECURE_NO_WARNINGS 1
 #define _WIN32_WINNT_WIN10 0x0A00
 
-//#define PLUGIN_VERSION 1
-//#define PLUGIN_NAME "ALR"
 
 #define PLUGIN_PATH_LEN 20
-#define MAX_INPUTS 456
 
 #define NOMINMAX
 
@@ -36,11 +33,6 @@
 #include <algorithm>
 #include <cctype>
 
-//#include "common/ITypes.h"
-//#include "common/IDebugLog.h"
-//#include "f4se_common/Utilities.h"
-//#include "F4SE/PluginAPI.h"
-//#include "f4se_common/f4se_version.h"
 
 using namespace std;
 using namespace DirectX;

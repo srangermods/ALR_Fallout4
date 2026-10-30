@@ -6,6 +6,7 @@ local plugin_version = "2.1.3"
 local plugin_version_major, plugin_version_minor, plugin_version_patch = plugin_version:match("^(%d+)%.(%d+)%.(%d+)$")
 
 add_requires("openmp")
+add_requires("directxtex")
 
 -- set project constants
 set_project("ALR_Fallout4")
@@ -35,19 +36,12 @@ target(plugin_name)
     add_packages("openmp")
 
     -- add src files
-    add_files(
-        "main.cpp",
-        "PathBuilder.cpp",
-        "PathDestroyer.cpp",
-        "imageConvert.cpp",
-        "UI.cpp",
-        "cmd.cpp",
-        "pch.cpp"
-    )
-    add_headerfiles("**.h")
-    add_includedirs("DirectXTex/DirectXTex")
-    add_links("extern/lib/DirectXTex") 
-    set_pcxxheader("pch.h")
+    add_files("src/**.cpp")
+    add_headerfiles("src/**.h")
+    add_packages("directxtex")
+    --add_includedirs("DirectXTex/DirectXTex")
+    --add_links("extern/lib/DirectXTex") 
+    set_pcxxheader("src/pch.h")
     
      -- pass name and version
     add_defines(
